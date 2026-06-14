@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/api/ai/grade", "destination": "/api/grade" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
