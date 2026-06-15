@@ -6,10 +6,13 @@ import QuestionManager from './components/QuestionManager';
 import StatsView from './components/StatsView';
 import Settings from './components/Settings';
 import DailyPractice from './components/DailyPractice';
+import HomeScreen from './components/HomeScreen';
+import AppShell from './components/AppShell';
 import './App.css';
+import './theme/theme.css';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('home');
   const [recitationData, setRecitationData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dialog, setDialog] = useState(null);
@@ -17,6 +20,25 @@ export default function App() {
   // Custom practice queue state
   const [practiceQueue, setPracticeQueue] = useState(null);
   const [practiceQueueName, setPracticeQueueName] = useState('');
+
+  // Theme state
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('gis_review_theme') || 'misty-rose';
+  });
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'orderly' ? 'misty-rose' : 'orderly';
+    setTheme(newTheme);
+    localStorage.setItem('gis_review_theme', newTheme);
+  };
+
+  const handleNavigate = (tab) => {
+    if (tab === 'dashboard') {
+      setActiveTab('home');
+    } else {
+      setActiveTab(tab);
+    }
+  };
 
   // Initialize data from database
   useEffect(() => {
@@ -139,7 +161,14 @@ export default function App() {
   };
 
   return (
-    <div className="app-container">
+    <AppShell
+      activeTab={activeTab}
+      setActiveTab={handleNavigate}
+      theme={theme}
+      toggleTheme={toggleTheme}
+      backendAvailable={true}
+      sessionFilter={practiceQueueName === '今日复习' ? 'review' : practiceQueueName === '今日新学' ? 'learn' : practiceQueueName === '错题强化' ? 'forgot' : 'all'}
+    >
       {/* Floating Global Import Progress Banner */}
       {importState.isImporting && (
         <div style={{
@@ -235,105 +264,73 @@ export default function App() {
           </button>
         </div>
       )}
-      {/* Navigation Header */}
-      <header className="nav-header">
-        <div className="logo-section">
-          <div className="logo-icon">G</div>
-          <div>
-            <span className="logo-title">GIS 考研背诵大师</span>
-            <span style={{ fontSize: '0.65rem', display: 'block', color: 'var(--text-secondary)' }}>
-              🟢 PostgreSQL 数据源已连接
-            </span>
-          </div>
-          <span className="logo-badge">V3.0</span>
+
+      {loading ? (
+        <div className="glass-panel" style={{ padding: '3rem', textAlign: 'center' }}>
+          <div className="spinner"></div>
+          <p style={{ marginTop: '1rem', color: 'var(--text-secondary)' }}>正在同步最新背诵库与莱特纳进度...</p>
         </div>
-
-        <nav className="nav-links">
-          <button className={`nav-tab ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
-            📊 看板
-          </button>
-          <button className={`nav-tab ${activeTab === 'today-review' ? 'active' : ''}`} onClick={() => setActiveTab('today-review')}>
-            🚀 今日复习
-          </button>
-          <button className={`nav-tab ${activeTab === 'daily-practice' ? 'active' : ''}`} onClick={() => setActiveTab('daily-practice')}>
-            🎯 每日练习
-          </button>
-          <button className={`nav-tab ${activeTab === 'recite' ? 'active' : ''}`} onClick={() => setActiveTab('recite')}>
-            📖 卡片背诵
-          </button>
-          <button className={`nav-tab ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')}>
-            📈 统计弱点
-          </button>
-          <button className={`nav-tab ${activeTab === 'editor' ? 'active' : ''}`} onClick={() => setActiveTab('editor')}>
-            ✏️ 题库管理
-          </button>
-          <button className={`nav-tab ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
-            ⚙️ 设置
-          </button>
-        </nav>
-      </header>
-
-      {/* Main Container */}
-      <main className="main-content">
-        {loading ? (
-          <div className="glass-panel" style={{ padding: '3rem', textAlign: 'center' }}>
-            <div className="spinner"></div>
-            <p style={{ marginTop: '1rem' }}>正在同步最新背诵库与莱特纳进度...</p>
-          </div>
-        ) : (
-          <>
-            {activeTab === 'dashboard' && (
-              <Dashboard 
-                onNavigate={setActiveTab} 
-              />
-            )}
-            
-            {activeTab === 'today-review' && (
-              <TodayReview 
-                onNavigate={setActiveTab}
-                customQueue={practiceQueue}
-                customQueueName={practiceQueueName}
-                onClearCustomQueue={() => {
-                  setPracticeQueue(null);
-                  setPracticeQueueName('');
-                }}
-              />
-            )}
-
-            {activeTab === 'daily-practice' && (
-              <DailyPractice
-                onStartPractice={(name, queue) => {
+      ) : (
+        <>
+          {activeTab === 'home' && (
+            <HomeScreen
+              startSession={(action, queue = null, name = '') => {
+                if (queue) {
                   setPracticeQueue(queue);
                   setPracticeQueueName(name);
                   setActiveTab('today-review');
-                }}
-              />
-            )}
-            
-            {activeTab === 'recite' && (
-              <ReciteCard 
-                recitationData={recitationData} 
-                onRateCard={handleRateCard} 
-              />
-            )}
+                } else {
+                  setActiveTab(action);
+                }
+              }}
+            />
+          )}
+          
+          {activeTab === 'today-review' && (
+            <TodayReview 
+              onNavigate={handleNavigate}
+              customQueue={practiceQueue}
+              customQueueName={practiceQueueName}
+              onClearCustomQueue={() => {
+                setPracticeQueue(null);
+                setPracticeQueueName('');
+              }}
+            />
+          )}
 
-            {activeTab === 'stats' && (
-              <StatsView />
-            )}
+          {activeTab === 'daily-practice' && (
+            <DailyPractice
+              onStartPractice={(name, queue) => {
+                setPracticeQueue(queue);
+                setPracticeQueueName(name);
+                setActiveTab('today-review');
+              }}
+            />
+          )}
+          
+          {activeTab === 'recite' && (
+            <ReciteCard 
+              recitationData={recitationData} 
+              onRateCard={handleRateCard} 
+            />
+          )}
 
-            {activeTab === 'editor' && (
-              <QuestionManager 
-                globalImportState={importState}
-                onStartGlobalImport={startGlobalImport}
-              />
-            )}
+          {activeTab === 'stats' && (
+            <StatsView />
+          )}
 
-            {activeTab === 'settings' && (
-              <Settings />
-            )}
-          </>
-        )}
-      </main>
+          {activeTab === 'editor' && (
+            <QuestionManager 
+              globalImportState={importState}
+              onStartGlobalImport={startGlobalImport}
+            />
+          )}
+
+          {activeTab === 'settings' && (
+            <Settings theme={theme} setTheme={setTheme} />
+          )}
+        </>
+      )}
 
       {/* Custom Dialog Overlay */}
       {dialog && (
@@ -370,6 +367,6 @@ export default function App() {
           </div>
         </div>
       )}
-    </div>
+    </AppShell>
   );
 }

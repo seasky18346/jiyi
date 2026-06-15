@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 
-export default function Settings() {
-  const [theme, setTheme] = useState('dark');
+export default function Settings({ theme, setTheme }) {
   const [message, setMessage] = useState('');
 
   const handleResetApp = async () => {
@@ -32,7 +31,62 @@ export default function Settings() {
           </div>
         )}
 
-        {/* Secure key reminder */}
+        {/* Theme settings */}
+        <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '1.5rem' }}>
+          <h3 style={{ fontSize: '1.1rem', color: 'var(--accent)', marginBottom: '1rem', fontFamily: 'var(--font-display)' }}>
+            🎨 系统个性化主题
+          </h3>
+          <div className="theme-selectors-row" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className={`theme-selector-card ${theme === 'misty-rose' ? 'active' : ''}`}
+              onClick={() => {
+                setTheme('misty-rose');
+                localStorage.setItem('gis_review_theme', 'misty-rose');
+              }}
+              style={{
+                flex: 1,
+                minWidth: '200px',
+                padding: '1rem',
+                borderRadius: '12px',
+                background: theme === 'misty-rose' ? 'rgba(255, 174, 185, 0.12)' : 'rgba(255, 255, 255, 0.02)',
+                border: theme === 'misty-rose' ? '2px solid var(--accent)' : '1px solid var(--border-color)',
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.2s ease',
+                color: 'var(--text-primary)'
+              }}
+            >
+              <div style={{ fontWeight: '700', marginBottom: '0.25rem' }}>Misty Rose (浅色柔和)</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>优雅粉色天空与雾蓝雪丘渐变</div>
+            </button>
+
+            <button
+              type="button"
+              className={`theme-selector-card ${theme === 'orderly' ? 'active' : ''}`}
+              onClick={() => {
+                setTheme('orderly');
+                localStorage.setItem('gis_review_theme', 'orderly');
+              }}
+              style={{
+                flex: 1,
+                minWidth: '200px',
+                padding: '1rem',
+                borderRadius: '12px',
+                background: theme === 'orderly' ? 'rgba(59, 130, 246, 0.12)' : 'rgba(255, 255, 255, 0.02)',
+                border: theme === 'orderly' ? '2px solid var(--accent)' : '1px solid var(--border-color)',
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.2s ease',
+                color: 'var(--text-primary)'
+              }}
+            >
+              <div style={{ fontWeight: '700', marginBottom: '0.25rem' }}>Orderly (深色专注)</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>立体微格纹黑色质感与高亮蓝色</div>
+            </button>
+          </div>
+        </div>
+
         <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '1.5rem' }}>
           <h3 style={{ fontSize: '1.1rem', color: 'var(--primary)', marginBottom: '0.5rem', fontFamily: 'var(--font-display)' }}>
             🛡️ 安全性与模型配置

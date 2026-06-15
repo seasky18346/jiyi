@@ -1,0 +1,130 @@
+/* Theme System variables */
+
+/* 1. Misty Rose Theme (Light Pastel, Default) */
+:root, [data-theme="misty-rose"] {
+  --bg-image: linear-gradient(135deg, #FFF5F6 0%, #E8F0FE 100%);
+  --bg-overlay: radial-gradient(circle at 80% 20%, rgba(255, 174, 185, 0.25) 0%, transparent 60%),
+                radial-gradient(circle at 15% 85%, rgba(164, 198, 255, 0.25) 0%, transparent 60%);
+  --card-bg: rgba(255, 255, 255, 0.55);
+  --card-border: rgba(255, 255, 255, 0.65);
+  --text-primary: #1C0F0A; /* Extremely dark brown for maximum contrast */
+  --text-secondary: #3D271D; /* Deep dark cocoa, highly legible */
+  --text-muted: #634E45; /* Dark sepia, clearly visible */
+  --accent: #E57373; /* Misty Rose primary accent */
+  --accent-hover: #EF5350;
+  --accent-muted: rgba(229, 115, 115, 0.15);
+  --nav-bg: rgba(255, 255, 255, 0.5);
+  --nav-border: rgba(255, 255, 255, 0.6);
+  --border-color: rgba(230, 210, 212, 0.5);
+  --shadow-color: rgba(229, 115, 115, 0.06);
+  --shadow-sm: 0 4px 12px rgba(229, 115, 115, 0.05);
+  --shadow-md: 0 12px 32px rgba(229, 115, 115, 0.1);
+  --shadow-lg: 0 24px 48px rgba(229, 115, 115, 0.15);
+  
+  --success: #2E7D32; /* Stronger green for light theme readability */
+  --success-glow: rgba(46, 125, 50, 0.15);
+  --danger: #C62828; /* Stronger red */
+  --danger-glow: rgba(198, 40, 40, 0.15);
+  --warning: #EF6C00; /* Stronger orange */
+  --warning-glow: rgba(239, 108, 0, 0.15);
+  --info: #1565C0; /* Stronger blue */
+  
+  --glass-blur: blur(20px);
+
+  /* Legacy variable mappings to guarantee full view inheritance */
+  --primary: var(--accent);
+  --primary-glow: var(--accent-muted);
+  --secondary: #6B46C1;
+  --bg-dark: #FFF5F6;
+  --bg-card: var(--card-bg);
+  --bg-card-hover: rgba(255, 255, 255, 0.75);
+  --border-glow: rgba(229, 115, 115, 0.3);
+}
+
+/* 2. Orderly Theme (Dark Focus, High Contrast) */
+[data-theme="orderly"] {
+  --bg-image: linear-gradient(135deg, #0A0B10 0%, #040406 100%);
+  --bg-overlay: radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.08) 0%, transparent 80%),
+                linear-gradient(rgba(255, 255, 255, 0.005) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.005) 1px, transparent 1px);
+  --card-bg: rgba(20, 22, 33, 0.85);
+  --card-border: rgba(255, 255, 255, 0.08);
+  --text-primary: #FFFFFF; /* Pure crisp white */
+  --text-secondary: #E2E8F0; /* Off-white for high legibility */
+  --text-muted: #94A3B8; /* Slate gray, easily readable */
+  --accent: #3B82F6; /* Bright royal blue */
+  --accent-hover: #60A5FA;
+  --accent-muted: rgba(59, 130, 246, 0.2);
+  --nav-bg: rgba(13, 14, 21, 0.85);
+  --nav-border: rgba(255, 255, 255, 0.08);
+  --border-color: rgba(255, 255, 255, 0.08);
+  --shadow-color: rgba(0, 0, 0, 0.6);
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 24px 48px rgba(0, 0, 0, 0.6);
+  
+  --success: #10B981;
+  --success-glow: rgba(16, 185, 129, 0.2);
+  --danger: #EF4444;
+  --danger-glow: rgba(239, 68, 68, 0.2);
+  --warning: #F59E0B;
+  --warning-glow: rgba(245, 158, 11, 0.2);
+  --info: #3B82F6;
+  
+  --glass-blur: blur(25px);
+
+  /* Legacy variable mappings to guarantee full view inheritance */
+  --primary: var(--accent);
+  --primary-glow: var(--accent-muted);
+  --secondary: #6366f1;
+  --bg-dark: #0A0B10;
+  --bg-card: var(--card-bg);
+  --bg-card-hover: rgba(28, 30, 46, 0.9);
+  --border-glow: rgba(59, 130, 246, 0.3);
+}
+
+/* Base resets & styles mapped to variables */
+.app-container {
+  min-height: 100vh;
+  background: var(--bg-image);
+  color: var(--text-primary);
+  position: relative;
+  overflow-x: hidden;
+  transition: background 0.5s ease, color 0.3s ease;
+}
+
+.app-container::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-overlay);
+  background-size: 100% 100%, 40px 40px, 40px 40px; /* grid pattern dimensions for Orderly */
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Button & form controls default settings override for theme integration */
+button, input, textarea, select {
+  font-family: var(--font-sans);
+}
+
+.text-btn.primary-btn {
+  background: var(--accent) !important;
+  color: var(--bg-dark) !important;
+}
+
+.text-btn.primary-btn:hover {
+  background: var(--accent-hover) !important;
+  color: var(--bg-dark) !important;
+}
+
+.tts-play-btn {
+  background: var(--accent) !important;
+  color: var(--bg-dark) !important;
+}
+.tts-play-btn:hover {
+  box-shadow: 0 0 15px var(--accent) !important;
+}
