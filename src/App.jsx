@@ -20,6 +20,7 @@ export default function App() {
   // Custom practice queue state
   const [practiceQueue, setPracticeQueue] = useState(null);
   const [practiceQueueName, setPracticeQueueName] = useState('');
+  const [practiceMode, setPracticeMode] = useState('standard');
 
   // Theme state
   const [theme, setTheme] = useState(() => {
@@ -274,7 +275,8 @@ export default function App() {
         <>
           {activeTab === 'home' && (
             <HomeScreen
-              startSession={(action, queue = null, name = '') => {
+              startSession={(action, queue = null, name = '', mode = 'standard') => {
+                setPracticeMode(mode);
                 if (queue) {
                   setPracticeQueue(queue);
                   setPracticeQueueName(name);
@@ -291,6 +293,7 @@ export default function App() {
               onNavigate={handleNavigate}
               customQueue={practiceQueue}
               customQueueName={practiceQueueName}
+              practiceMode={practiceMode}
               onClearCustomQueue={() => {
                 setPracticeQueue(null);
                 setPracticeQueueName('');

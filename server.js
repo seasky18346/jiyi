@@ -200,7 +200,7 @@ app.get('/api/today-reviews', async (req, res) => {
 // 7. Secure AI Grading API with DB History Logging (Combined Grading)
 app.post('/api/ai/grade', async (req, res) => {
   try {
-    const { questionId, clozeScore, clozeAnswers, fullAnswerInput } = req.body;
+    const { questionId, clozeScore, clozeAnswers, fullAnswerInput, skipAI } = req.body;
 
     if (!questionId) {
       return res.status(400).json({ success: false, message: 'questionId is required' });
@@ -216,8 +216,8 @@ app.post('/api/ai/grade', async (req, res) => {
 
     let gradingResult;
 
-    // Call AI if enabled, otherwise fallback to local keyword matching
-    if (process.env.AI_API_KEY && process.env.ENABLE_AI_GRADING !== 'false') {
+    // Call AI if enabled and not skipped, otherwise fallback to local keyword matching
+    if (!skipAI && process.env.AI_API_KEY && process.env.ENABLE_AI_GRADING !== 'false') {
       try {
         const systemPrompt = `你是一位专业的考研专业课阅卷教师。你需要对【论述题部分】的学生作答进行评审和评分（0-10分制，评分必须为整数）。
 

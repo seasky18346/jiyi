@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 
-export default function TodayReview({ onNavigate, customQueue, customQueueName, onClearCustomQueue }) {
+export default function TodayReview({ onNavigate, customQueue, customQueueName, practiceMode, onClearCustomQueue }) {
   const [loading, setLoading] = useState(true);
+  const [currentPracticeMode, setCurrentPracticeMode] = useState(practiceMode || 'standard');
   const [reviews, setReviews] = useState({
     newQuestions: [],
     dueQuestions: [],
@@ -40,9 +41,9 @@ export default function TodayReview({ onNavigate, customQueue, customQueueName, 
   // Auto-start custom practice queue if passed from parent
   useEffect(() => {
     if (customQueue && customQueue.length > 0) {
-      startQueue(customQueueName || '自主练习', customQueue);
+      startQueue(customQueueName || '自主练习', customQueue, practiceMode);
     }
-  }, [customQueue, customQueueName]);
+  }, [customQueue, customQueueName, practiceMode]);
 
   const fetchReviews = async () => {
     setLoading(true);
@@ -67,11 +68,21 @@ export default function TodayReview({ onNavigate, customQueue, customQueueName, 
     }
   };
 
-  const startQueue = (name, list) => {
+  const startQueue = (name, list, mode = 'standard') => {
     if (list.length === 0) return;
     setActiveQueue(list);
     setQueueName(name);
     setCurrentIndex(0);
+    
+    // Resolve mode based on queue name defaults or requested mode
+    let targetMode = mode;
+    if (name === '今日复习') {
+      targetMode = 'standard';
+    } else if (name === '错题强化') {
+      targetMode = 'deep';
+    }
+    setCurrentPracticeMode(targetMode);
+    
     resetStudyState();
   };
 
@@ -137,6 +148,110 @@ export default function TodayReview({ onNavigate, customQueue, customQueueName, 
         setGradingResult(data.data);
       } else {
         await window.customAlert('AI 联合评分失败: ' + data.message);
+      }
+    } catch (err) {
+      console.error(err);
+      await window.customAlert('打分请求错误，请检查网络或后端配置。');
+    } finally {
+      setIsGrading(false);
+    }
+  };
+
+  // For Quick Mode: submit cloze answers, grade locally, and save attempt
+  const handleClozeSubmit = async () => {
+    const currentQ = activeQueue[currentIndex];
+    if (!currentQ) return;
+
+    setIsGrading(true);
+    setIsSubmitted(true);
+
+    const keywords = currentQ.cloze_keywords || [];
+    let correctCount = 0;
+
+    keywords.forEach((kw, idx) => {
+      const ans = (clozeAnswers[`kw_${idx}`] || '').trim();
+      if (ans.toLowerCase() === kw.toLowerCase()) {
+        correctCount++;
+      }
+    });
+
+    const score = keywords.length > 0 ? parseFloat(((correctCount / keywords.length) * 10).toFixed(1)) : 10;
+    setClozeScore(score);
+
+    try {
+      const res = await fetch('/api/cloze/grade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionId: currentQ.id,
+          score: score,
+          answers: clozeAnswers,
+          result: {
+            score: score,
+            full_evaluation: {
+              score: score,
+              level: score >= 8 ? '熟练掌握' : score >= 5 ? '基本掌握' : '模糊印象',
+              covered_points: [],
+              missing_points: [],
+              wrong_points: [],
+              suggestion: '快速复习模式：仅填空自测。',
+              exam_comment: `[本地评分] 填空正确率: ${score * 10}%`
+            }
+          }
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setGradingResult({
+          clozeScore: score,
+          fullScore: null,
+          totalScore: score,
+          full_evaluation: {
+            score: score,
+            level: score >= 8 ? '熟练掌握' : score >= 5 ? '基本掌握' : '模糊印象',
+            covered_points: [],
+            missing_points: [],
+            wrong_points: [],
+            suggestion: '快速复习模式已完成填空核对，论述部分已跳过。',
+            exam_comment: `填空正确率: ${score * 10}%`
+          }
+        });
+      } else {
+        await window.customAlert('保存填空结果失败: ' + data.message);
+      }
+    } catch (err) {
+      console.error(err);
+      await window.customAlert('打分请求错误，请检查网络或后端配置。');
+    } finally {
+      setIsGrading(false);
+    }
+  };
+
+  // For Standard Mode: submit answers and grade using local keyword matching (bypass LLM)
+  const handleSkipAI = async () => {
+    const currentQ = activeQueue[currentIndex];
+    if (!currentQ) return;
+
+    setIsGrading(true);
+    setIsSubmitted(true);
+
+    try {
+      const res = await fetch('/api/ai/grade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionId: currentQ.id,
+          clozeScore: clozeScore,
+          clozeAnswers,
+          fullAnswerInput: fullAnswerInput.trim(),
+          skipAI: true
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setGradingResult(data.data);
+      } else {
+        await window.customAlert('保存评阅结果失败: ' + data.message);
       }
     } catch (err) {
       console.error(err);
@@ -297,9 +412,9 @@ export default function TodayReview({ onNavigate, customQueue, customQueueName, 
                 )}
                 <button 
                   className="text-btn" 
-                  onClick={() => onNavigate('dashboard')}
+                  onClick={() => onNavigate('home')}
                 >
-                  返回看板
+                  返回首页
                 </button>
               </div>
             </div>
@@ -473,7 +588,7 @@ export default function TodayReview({ onNavigate, customQueue, customQueueName, 
       </div>
 
       {/* Stepper Header (Disabled if submitted) */}
-      {!isSubmitted && (
+      {!isSubmitted && currentPracticeMode !== 'quick' && (
         <div className="glass-panel" style={{ padding: '1rem', background: 'rgba(16, 22, 42, 0.3)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', gap: '1rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: step >= 1 ? 1 : 0.4 }}>
@@ -563,14 +678,25 @@ export default function TodayReview({ onNavigate, customQueue, customQueueName, 
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-                <button
-                  type="button"
-                  className="text-btn primary-btn"
-                  onClick={handleClozeNext}
-                  style={{ padding: '0.6rem 2rem' }}
-                >
-                  下一步：论述自测 ➔
-                </button>
+                {currentPracticeMode === 'quick' ? (
+                  <button
+                    type="button"
+                    className="text-btn primary-btn"
+                    onClick={handleClozeSubmit}
+                    style={{ padding: '0.6rem 2rem' }}
+                  >
+                    提交检查 ➔
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="text-btn primary-btn"
+                    onClick={handleClozeNext}
+                    style={{ padding: '0.6rem 2rem' }}
+                  >
+                    下一步：论述自测 ➔
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -600,7 +726,7 @@ export default function TodayReview({ onNavigate, customQueue, customQueueName, 
                 }}
               />
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
                 <button
                   type="button"
                   className="text-btn"
@@ -609,14 +735,26 @@ export default function TodayReview({ onNavigate, customQueue, customQueueName, 
                 >
                   ↩️ 返回填空
                 </button>
-                <button
-                  type="button"
-                  className="text-btn primary-btn"
-                  onClick={handleCombinedSubmit}
-                  style={{ padding: '0.6rem 2.5rem' }}
-                >
-                  🚀 提交整题 AI 阅卷评估
-                </button>
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  {currentPracticeMode === 'standard' && (
+                    <button
+                      type="button"
+                      className="text-btn"
+                      onClick={handleSkipAI}
+                      style={{ padding: '0.6rem 1.5rem', borderColor: 'var(--accent)', color: 'var(--accent)' }}
+                    >
+                      🔍 查看答案并跳过 AI
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="text-btn primary-btn"
+                    onClick={handleCombinedSubmit}
+                    style={{ padding: '0.6rem 2.5rem' }}
+                  >
+                    🚀 提交整题 AI 阅卷评估
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -668,45 +806,49 @@ export default function TodayReview({ onNavigate, customQueue, customQueueName, 
                 </div>
 
                 {/* Weighted Sub-Scores Cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
-                  <div className="glass-panel" style={{ padding: '0.75rem 1rem', textAlign: 'center', background: 'rgba(255,255,255,0.01)' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>填空自测 (40%)</span>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 'bold', margin: '0.2rem 0', color: 'var(--text-primary)' }}>
-                      {gradingResult.clozeScore} <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>/ 10</span>
+                {currentPracticeMode !== 'quick' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+                    <div className="glass-panel" style={{ padding: '0.75rem 1rem', textAlign: 'center', background: 'rgba(255,255,255,0.01)' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>填空自测 (40%)</span>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 'bold', margin: '0.2rem 0', color: 'var(--text-primary)' }}>
+                        {gradingResult.clozeScore} <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>/ 10</span>
+                      </div>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>折合加权: {(gradingResult.clozeScore * 0.4).toFixed(1)}分</span>
                     </div>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>折合加权: {(gradingResult.clozeScore * 0.4).toFixed(1)}分</span>
-                  </div>
-                  <div className="glass-panel" style={{ padding: '0.75rem 1rem', textAlign: 'center', background: 'rgba(255,255,255,0.01)' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>论述细节 (60%)</span>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 'bold', margin: '0.2rem 0', color: 'var(--text-primary)' }}>
-                      {gradingResult.fullScore} <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>/ 10</span>
+                    <div className="glass-panel" style={{ padding: '0.75rem 1rem', textAlign: 'center', background: 'rgba(255,255,255,0.01)' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>论述细节 (60%)</span>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 'bold', margin: '0.2rem 0', color: 'var(--text-primary)' }}>
+                        {gradingResult.fullScore} <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>/ 10</span>
+                      </div>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>折合加权: {(gradingResult.fullScore * 0.6).toFixed(2)}分</span>
                     </div>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>折合加权: {(gradingResult.fullScore * 0.6).toFixed(2)}分</span>
                   </div>
-                </div>
+                )}
 
                 {/* Tabbed Report Selector */}
-                <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', marginTop: '0.5rem', paddingBottom: '0.5rem' }}>
-                  <button 
-                    type="button" 
-                    className={`nav-tab ${activeReportTab === 'cloze' ? 'active' : ''}`}
-                    onClick={() => setActiveReportTab('cloze')}
-                    style={{ fontSize: '0.8rem', padding: '0.3rem 1rem' }}
-                  >
-                    🧩 填空核对
-                  </button>
-                  <button 
-                    type="button" 
-                    className={`nav-tab ${activeReportTab === 'full' ? 'active' : ''}`}
-                    onClick={() => setActiveReportTab('full')}
-                    style={{ fontSize: '0.8rem', padding: '0.3rem 1rem' }}
-                  >
-                    📝 论述细节分析
-                  </button>
-                </div>
+                {currentPracticeMode !== 'quick' && (
+                  <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', marginTop: '0.5rem', paddingBottom: '0.5rem' }}>
+                    <button 
+                      type="button" 
+                      className={`nav-tab ${activeReportTab === 'cloze' ? 'active' : ''}`}
+                      onClick={() => setActiveReportTab('cloze')}
+                      style={{ fontSize: '0.8rem', padding: '0.3rem 1rem' }}
+                    >
+                      🧩 填空核对
+                    </button>
+                    <button 
+                      type="button" 
+                      className={`nav-tab ${activeReportTab === 'full' ? 'active' : ''}`}
+                      onClick={() => setActiveReportTab('full')}
+                      style={{ fontSize: '0.8rem', padding: '0.3rem 1rem' }}
+                    >
+                      📝 论述细节分析
+                    </button>
+                  </div>
+                )}
 
                 {/* Tab Content 1: Cloze */}
-                {activeReportTab === 'cloze' && (
+                {(activeReportTab === 'cloze' || currentPracticeMode === 'quick') && (
                   <div className="animate-fade" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     <h4 style={{ fontSize: '0.9rem', fontWeight: '600' }}>🧩 填空对照分析</h4>
                     <div style={{ 
@@ -727,7 +869,7 @@ export default function TodayReview({ onNavigate, customQueue, customQueueName, 
                 )}
 
                 {/* Tab Content 2: Essay */}
-                {activeReportTab === 'full' && (
+                {currentPracticeMode !== 'quick' && activeReportTab === 'full' && (
                   <div className="animate-fade" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                       <div className="glass-panel" style={{ padding: '0.85rem', background: 'rgba(16, 185, 129, 0.03)', borderColor: 'rgba(16, 185, 129, 0.15)' }}>
