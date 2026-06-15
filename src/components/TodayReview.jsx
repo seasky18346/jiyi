@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export default function TodayReview({ onNavigate }) {
+export default function TodayReview({ onNavigate, customQueue, customQueueName, onClearCustomQueue }) {
   const [loading, setLoading] = useState(true);
   const [reviews, setReviews] = useState({
     newQuestions: [],
@@ -22,21 +22,27 @@ export default function TodayReview({ onNavigate }) {
   const [freeChapter, setFreeChapter] = useState('');
   const [freeType, setFreeType] = useState('');
 
-  // Study states (Tri-Test Stepper Workflow)
-  const [step, setStep] = useState(1); // 1: Cloze (填空), 2: Short (简答), 3: Essay (论述)
+  // Study states (Bi-Test Stepper Workflow)
+  const [step, setStep] = useState(1); // 1: Cloze (填空), 2: Essay (论述)
   const [clozeAnswers, setClozeAnswers] = useState({});
-  const [shortAnswerInput, setShortAnswerInput] = useState('');
   const [fullAnswerInput, setFullAnswerInput] = useState('');
   const [clozeScore, setClozeScore] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isGrading, setIsGrading] = useState(false);
   const [gradingResult, setGradingResult] = useState(null);
-  const [activeReportTab, setActiveReportTab] = useState('cloze'); // 'cloze', 'short', 'full'
+  const [activeReportTab, setActiveReportTab] = useState('cloze'); // 'cloze', 'full'
   
   // Load review queues
   useEffect(() => {
     fetchReviews();
   }, []);
+
+  // Auto-start custom practice queue if passed from parent
+  useEffect(() => {
+    if (customQueue && customQueue.length > 0) {
+      startQueue(customQueueName || '自主练习', customQueue);
+    }
+  }, [customQueue, customQueueName]);
 
   const fetchReviews = async () => {
     setLoading(true);
@@ -72,7 +78,6 @@ export default function TodayReview({ onNavigate }) {
   const resetStudyState = () => {
     setStep(1);
     setClozeAnswers({});
-    setShortAnswerInput('');
     setFullAnswerInput('');
     setClozeScore(0);
     setIsSubmitted(false);
@@ -108,12 +113,7 @@ export default function TodayReview({ onNavigate }) {
     setStep(2);
   };
 
-  // Step 2: Transition to Step 3
-  const handleShortNext = () => {
-    setStep(3);
-  };
-
-  // Step 3: Submit all answers for combined AI grading
+  // Step 2: Submit all answers for combined AI grading
   const handleCombinedSubmit = async () => {
     const currentQ = activeQueue[currentIndex];
     if (!currentQ) return;
@@ -129,7 +129,6 @@ export default function TodayReview({ onNavigate }) {
           questionId: currentQ.id,
           clozeScore: clozeScore,
           clozeAnswers,
-          shortAnswerInput: shortAnswerInput.trim(),
           fullAnswerInput: fullAnswerInput.trim()
         })
       });
@@ -153,9 +152,14 @@ export default function TodayReview({ onNavigate }) {
       resetStudyState();
     } else {
       await window.customAlert('恭喜你，完成了本次复习！');
-      fetchReviews();
-      setActiveQueue([]);
-      setQueueName('');
+      if (customQueue) {
+        onClearCustomQueue();
+        onNavigate('daily-practice');
+      } else {
+        fetchReviews();
+        setActiveQueue([]);
+        setQueueName('');
+      }
     }
   };
 
@@ -453,9 +457,14 @@ export default function TodayReview({ onNavigate }) {
           style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem' }}
           onClick={async () => {
             if (await window.customConfirm('确认退出本次复习？')) {
-              setActiveQueue([]);
-              setQueueName('');
-              fetchReviews();
+              if (customQueue) {
+                onClearCustomQueue();
+                onNavigate('daily-practice');
+              } else {
+                setActiveQueue([]);
+                setQueueName('');
+                fetchReviews();
+              }
             }
           }}
         >
@@ -490,7 +499,7 @@ export default function TodayReview({ onNavigate }) {
                 width: '28px',
                 height: '28px',
                 borderRadius: '50%',
-                background: step === 2 ? 'var(--primary)' : step > 2 ? 'rgba(0, 210, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                background: step === 2 ? 'var(--primary)' : 'rgba(255, 255, 255, 0.05)',
                 border: step >= 2 ? '2px solid var(--primary)' : '2px solid var(--border-color)',
                 display: 'flex',
                 alignItems: 'center',
@@ -500,25 +509,7 @@ export default function TodayReview({ onNavigate }) {
                 color: '#fff',
                 boxShadow: step === 2 ? '0 0 10px var(--primary)' : 'none'
               }}>2</div>
-              <span style={{ fontSize: '0.85rem', fontWeight: step === 2 ? 'bold' : 'normal' }}>简答要点</span>
-            </div>
-            <div style={{ flexGrow: 1, height: '2px', background: step >= 3 ? 'var(--primary)' : 'var(--border-color)' }}></div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: step >= 3 ? 1 : 0.4 }}>
-              <div style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: '50%',
-                background: step === 3 ? 'var(--primary)' : 'rgba(255, 255, 255, 0.05)',
-                border: step >= 3 ? '2px solid var(--primary)' : '2px solid var(--border-color)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 'bold',
-                fontSize: '0.85rem',
-                color: '#fff',
-                boxShadow: step === 3 ? '0 0 10px var(--primary)' : 'none'
-              }}>3</div>
-              <span style={{ fontSize: '0.85rem', fontWeight: step === 3 ? 'bold' : 'normal' }}>论述阐述</span>
+              <span style={{ fontSize: '0.85rem', fontWeight: step === 2 ? 'bold' : 'normal' }}>论述自测</span>
             </div>
           </div>
         </div>
@@ -578,63 +569,17 @@ export default function TodayReview({ onNavigate }) {
                   onClick={handleClozeNext}
                   style={{ padding: '0.6rem 2rem' }}
                 >
-                  下一步：简答自测 ➔
+                  下一步：论述自测 ➔
                 </button>
               </div>
             </div>
           )}
 
           {step === 2 && (
-            /* Step 2: Short Answer */
+            /* Step 2: Essay */
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
-                <span style={{ fontWeight: '600', fontSize: '0.95rem', display: 'block' }}>✍️ 第二步：简答要点自测</span>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  要求：理清答题框架，写出核心分类或主干要点，简短跟一句解释即可。
-                </span>
-              </div>
-              
-              <textarea
-                className="form-input-text"
-                placeholder="在此写下脑海里回忆出来的核心要点或逻辑框架，稍微进行简短的解释说明..."
-                value={shortAnswerInput}
-                onChange={(e) => setShortAnswerInput(e.target.value)}
-                style={{
-                  minHeight: '180px',
-                  lineHeight: '1.6',
-                  fontSize: '0.95rem',
-                  resize: 'vertical',
-                  padding: '1rem',
-                  background: 'rgba(0, 0, 0, 0.2)'
-                }}
-              />
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
-                <button
-                  type="button"
-                  className="text-btn"
-                  onClick={() => setStep(1)}
-                  style={{ padding: '0.6rem 1.5rem' }}
-                >
-                  ↩️ 返回填空
-                </button>
-                <button
-                  type="button"
-                  className="text-btn primary-btn"
-                  onClick={handleShortNext}
-                  style={{ padding: '0.6rem 2rem' }}
-                >
-                  下一步：详细论述 ➔
-                </button>
-              </div>
-            </div>
-          )}
-
-          {step === 3 && (
-            /* Step 3: Essay */
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div>
-                <span style={{ fontWeight: '600', fontSize: '0.95rem', display: 'block' }}>📝 第三步：详细论述自测</span>
+                <span style={{ fontWeight: '600', fontSize: '0.95rem', display: 'block' }}>✍️ 第二步：详细论述自测</span>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                   要求：尽量完整详尽地写出所有展开细节、背景理论及完整的对比阐述。
                 </span>
@@ -642,7 +587,7 @@ export default function TodayReview({ onNavigate }) {
               
               <textarea
                 className="form-input-text"
-                placeholder="在此写下完整的论述答案。AI 随后将对您的简答框架和论述细节进行整合判卷评分..."
+                placeholder="在此写下完整的论述答案。AI 随后将对您的论述细节进行判卷评分..."
                 value={fullAnswerInput}
                 onChange={(e) => setFullAnswerInput(e.target.value)}
                 style={{
@@ -659,10 +604,10 @@ export default function TodayReview({ onNavigate }) {
                 <button
                   type="button"
                   className="text-btn"
-                  onClick={() => setStep(2)}
+                  onClick={() => setStep(1)}
                   style={{ padding: '0.6rem 1.5rem' }}
                 >
-                  ↩️ 返回简答
+                  ↩️ 返回填空
                 </button>
                 <button
                   type="button"
@@ -685,7 +630,7 @@ export default function TodayReview({ onNavigate }) {
             <div className="glass-panel" style={{ padding: '3rem 2rem', textAlign: 'center' }}>
               <div className="spinner"></div>
               <p style={{ marginTop: '1.5rem', color: 'var(--primary)', fontWeight: '500', fontSize: '1.05rem' }}>
-                考研辅导 AI 正在结合简答框架与论述细节进行深度卷面评阅，请稍候...
+                考研辅导 AI 正在评阅您的卷面，请稍候...
               </p>
             </div>
           ) : (
@@ -697,7 +642,7 @@ export default function TodayReview({ onNavigate }) {
                   <div>
                     <h3 style={{ fontSize: '1.3rem', fontFamily: 'var(--font-display)' }}>📊 综合考评阅卷报告</h3>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                      计算权重：填空（20%）+ 简答（35%）+ 论述（45%）。综合评分将更新卡片复习间隔。
+                      计算权重：填空（40%）+ 论述（60%）。综合评分将更新卡片复习间隔。
                     </p>
                   </div>
                   <div style={{ textAlign: 'right' }}>
@@ -723,27 +668,20 @@ export default function TodayReview({ onNavigate }) {
                 </div>
 
                 {/* Weighted Sub-Scores Cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
                   <div className="glass-panel" style={{ padding: '0.75rem 1rem', textAlign: 'center', background: 'rgba(255,255,255,0.01)' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>填空自测 (20%)</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>填空自测 (40%)</span>
                     <div style={{ fontSize: '1.2rem', fontWeight: 'bold', margin: '0.2rem 0', color: 'var(--text-primary)' }}>
                       {gradingResult.clozeScore} <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>/ 10</span>
                     </div>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>折合加权: {(gradingResult.clozeScore * 0.2).toFixed(1)}分</span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>折合加权: {(gradingResult.clozeScore * 0.4).toFixed(1)}分</span>
                   </div>
                   <div className="glass-panel" style={{ padding: '0.75rem 1rem', textAlign: 'center', background: 'rgba(255,255,255,0.01)' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>简答框架 (35%)</span>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 'bold', margin: '0.2rem 0', color: 'var(--text-primary)' }}>
-                      {gradingResult.shortScore} <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>/ 10</span>
-                    </div>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>折合加权: {(gradingResult.shortScore * 0.35).toFixed(2)}分</span>
-                  </div>
-                  <div className="glass-panel" style={{ padding: '0.75rem 1rem', textAlign: 'center', background: 'rgba(255,255,255,0.01)' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>论述细节 (45%)</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>论述细节 (60%)</span>
                     <div style={{ fontSize: '1.2rem', fontWeight: 'bold', margin: '0.2rem 0', color: 'var(--text-primary)' }}>
                       {gradingResult.fullScore} <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>/ 10</span>
                     </div>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>折合加权: {(gradingResult.fullScore * 0.45).toFixed(2)}分</span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>折合加权: {(gradingResult.fullScore * 0.6).toFixed(2)}分</span>
                   </div>
                 </div>
 
@@ -756,14 +694,6 @@ export default function TodayReview({ onNavigate }) {
                     style={{ fontSize: '0.8rem', padding: '0.3rem 1rem' }}
                   >
                     🧩 填空核对
-                  </button>
-                  <button 
-                    type="button" 
-                    className={`nav-tab ${activeReportTab === 'short' ? 'active' : ''}`}
-                    onClick={() => setActiveReportTab('short')}
-                    style={{ fontSize: '0.8rem', padding: '0.3rem 1rem' }}
-                  >
-                    ✍️ 简答框架分析
                   </button>
                   <button 
                     type="button" 
@@ -796,56 +726,7 @@ export default function TodayReview({ onNavigate }) {
                   </div>
                 )}
 
-                {/* Tab Content 2: Short Answer */}
-                {activeReportTab === 'short' && (
-                  <div className="animate-fade" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                      <div className="glass-panel" style={{ padding: '0.85rem', background: 'rgba(16, 185, 129, 0.03)', borderColor: 'rgba(16, 185, 129, 0.15)' }}>
-                        <span style={{ color: 'var(--success)', fontSize: '0.85rem', fontWeight: 'bold' }}>🟢 命中核心大类 ({gradingResult.short_evaluation?.covered_points?.length || 0})</span>
-                        <ul style={{ paddingLeft: '1.2rem', fontSize: '0.8rem', marginTop: '0.5rem', lineHeight: '1.6' }}>
-                          {gradingResult.short_evaluation?.covered_points?.length > 0 ? (
-                            gradingResult.short_evaluation.covered_points.map((pt, i) => <li key={i}>{pt}</li>)
-                          ) : <li style={{ listStyle: 'none', color: 'var(--text-muted)' }}>未命中框架大类</li>}
-                        </ul>
-                      </div>
-                      <div className="glass-panel" style={{ padding: '0.85rem', background: 'rgba(239, 68, 68, 0.03)', borderColor: 'rgba(239, 68, 68, 0.15)' }}>
-                        <span style={{ color: 'var(--danger)', fontSize: '0.85rem', fontWeight: 'bold' }}>🔴 遗漏核心大类 ({gradingResult.short_evaluation?.missing_points?.length || 0})</span>
-                        <ul style={{ paddingLeft: '1.2rem', fontSize: '0.8rem', marginTop: '0.5rem', lineHeight: '1.6' }}>
-                          {gradingResult.short_evaluation?.missing_points?.length > 0 ? (
-                            gradingResult.short_evaluation.missing_points.map((pt, i) => <li key={i}>{pt}</li>)
-                          ) : <li style={{ listStyle: 'none', color: 'var(--success)' }}>全部命中！</li>}
-                        </ul>
-                      </div>
-                    </div>
-
-                    {gradingResult.short_evaluation?.wrong_points?.length > 0 && (
-                      <div style={{ padding: '0.75rem', background: 'rgba(239,68,68,0.08)', borderRadius: '6px', fontSize: '0.85rem' }}>
-                        <strong style={{ color: 'var(--danger)' }}>⚠️ 误区/概念混淆：</strong>
-                        <span style={{ color: 'var(--text-primary)' }}>{gradingResult.short_evaluation.wrong_points.join('；')}</span>
-                      </div>
-                    )}
-
-                    <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block' }}>🧑‍🏫 阅卷小结</span>
-                      <p style={{ fontSize: '0.85rem', lineHeight: '1.5', fontStyle: 'italic', margin: '0.25rem 0' }}>
-                        “ {gradingResult.short_evaluation?.exam_comment || '无'} ”
-                      </p>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.5rem' }}>💡 框架记忆建议</span>
-                      <p style={{ fontSize: '0.85rem', color: 'var(--primary)' }}>
-                        {gradingResult.short_evaluation?.suggestion || '无'}
-                      </p>
-                    </div>
-
-                    <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>📋 参考简答标准框架</span>
-                      <div style={{ padding: '0.75rem', background: 'rgba(0,0,0,0.15)', borderRadius: '6px', fontSize: '0.85rem', whiteSpace: 'pre-line', marginTop: '0.25rem' }}>
-                        {currentQ.short_answer}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Tab Content 3: Essay */}
+                {/* Tab Content 2: Essay */}
                 {activeReportTab === 'full' && (
                   <div className="animate-fade" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>

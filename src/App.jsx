@@ -5,6 +5,7 @@ import ReciteCard from './components/ReciteCard';
 import QuestionManager from './components/QuestionManager';
 import StatsView from './components/StatsView';
 import Settings from './components/Settings';
+import DailyPractice from './components/DailyPractice';
 import './App.css';
 
 export default function App() {
@@ -12,6 +13,10 @@ export default function App() {
   const [recitationData, setRecitationData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dialog, setDialog] = useState(null);
+  
+  // Custom practice queue state
+  const [practiceQueue, setPracticeQueue] = useState(null);
+  const [practiceQueueName, setPracticeQueueName] = useState('');
 
   // Initialize data from database
   useEffect(() => {
@@ -94,6 +99,9 @@ export default function App() {
           <button className={`nav-tab ${activeTab === 'today-review' ? 'active' : ''}`} onClick={() => setActiveTab('today-review')}>
             🚀 今日复习
           </button>
+          <button className={`nav-tab ${activeTab === 'daily-practice' ? 'active' : ''}`} onClick={() => setActiveTab('daily-practice')}>
+            🎯 每日练习
+          </button>
           <button className={`nav-tab ${activeTab === 'recite' ? 'active' : ''}`} onClick={() => setActiveTab('recite')}>
             📖 卡片背诵
           </button>
@@ -127,6 +135,22 @@ export default function App() {
             {activeTab === 'today-review' && (
               <TodayReview 
                 onNavigate={setActiveTab}
+                customQueue={practiceQueue}
+                customQueueName={practiceQueueName}
+                onClearCustomQueue={() => {
+                  setPracticeQueue(null);
+                  setPracticeQueueName('');
+                }}
+              />
+            )}
+
+            {activeTab === 'daily-practice' && (
+              <DailyPractice
+                onStartPractice={(name, queue) => {
+                  setPracticeQueue(queue);
+                  setPracticeQueueName(name);
+                  setActiveTab('today-review');
+                }}
               />
             )}
             

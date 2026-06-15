@@ -8,16 +8,6 @@ export default function ReciteCard({ recitationData, onRateCard }) {
   const [maskKeywords, setMaskKeywords] = useState(true);
   const [revealedKeywords, setRevealedKeywords] = useState({});
   
-  // TTS State
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [activeSentenceIndex, setActiveSentenceIndex] = useState(-1);
-  const [ttsSpeed, setTtsSpeed] = useState(1.0);
-  
-  const synthRef = useRef(window.speechSynthesis);
-  const sentencesRef = useRef([]);
-  const currentUtteranceRef = useRef(null);
-  const currentSentenceIdxRef = useRef(-1);
-
   // Extract unique subjects and chapters from flat questions list
   const subjects = [...new Set(recitationData.map(q => q.subject).filter(Boolean))];
   const chapters = [...new Set(recitationData.map(q => q.chapter).filter(Boolean))];
@@ -35,28 +25,18 @@ export default function ReciteCard({ recitationData, onRateCard }) {
   useEffect(() => {
     setCurrentIndex(0);
     setIsFlipped(false);
-    stopTTS();
   }, [selectedSubject, selectedChapter]);
 
   // Reset flip when card changes
   useEffect(() => {
     setIsFlipped(false);
     setRevealedKeywords({});
-    stopTTS();
   }, [currentIndex]);
-
-  // Clean up speech on unmount
-  useEffect(() => {
-    return () => {
-      stopTTS();
-    };
-  }, []);
 
   const handleFlip = (e) => {
     if (
       e.target.classList.contains('keyword-masked') || 
       e.target.closest('.eval-btn') || 
-      e.target.closest('.tts-controls-panel') ||
       e.target.closest('.nav-buttons-row') ||
       e.target.closest('.custom-select') ||
       e.target.closest('.switch')
@@ -100,89 +80,7 @@ export default function ReciteCard({ recitationData, onRateCard }) {
     }));
   };
 
-  // --- TTS Implementation ---
-  const splitIntoSentences = (text) => {
-    const cleanText = text.replace(/\*\*/g, '');
-    const matches = cleanText.split(/([。！吗？；;!?\n])/);
-    const sentences = [];
-    for (let i = 0; i < matches.length; i += 2) {
-      const sentence = (matches[i] || '') + (matches[i + 1] || '');
-      if (sentence.trim()) {
-        sentences.push(sentence.trim());
-      }
-    }
-    return sentences;
-  };
 
-  const startTTS = () => {
-    if (!currentCard) return;
-    
-    stopTTS();
-    
-    const fullText = `概念：${currentCard.question}。填空答案是：${currentCard.cloze_answer || ''}。简答要点是：${currentCard.short_answer || ''}。论述细节是：${currentCard.full_answer || ''}`;
-    const sentences = splitIntoSentences(fullText);
-    sentencesRef.current = sentences;
-    currentSentenceIdxRef.current = 0;
-    
-    setIsSpeaking(true);
-    speakSentence();
-  };
-
-  const speakSentence = () => {
-    if (!synthRef.current) return;
-    
-    const idx = currentSentenceIdxRef.current;
-    if (idx >= sentencesRef.current.length) {
-      stopTTS();
-      return;
-    }
-
-    setActiveSentenceIndex(idx);
-    const text = sentencesRef.current[idx];
-    
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'zh-CN';
-    utterance.rate = ttsSpeed;
-    
-    utterance.onend = () => {
-      currentSentenceIdxRef.current += 1;
-      speakSentence();
-    };
-
-    utterance.onerror = (e) => {
-      console.error('TTS Error:', e);
-      stopTTS();
-    };
-
-    currentUtteranceRef.current = utterance;
-    synthRef.current.speak(utterance);
-  };
-
-  const stopTTS = () => {
-    if (synthRef.current) {
-      synthRef.current.cancel();
-    }
-    setIsSpeaking(false);
-    setActiveSentenceIndex(-1);
-    currentSentenceIdxRef.current = -1;
-  };
-
-  const toggleTTS = () => {
-    if (isSpeaking) {
-      stopTTS();
-    } else {
-      startTTS();
-    }
-  };
-
-  useEffect(() => {
-    if (isSpeaking) {
-      if (synthRef.current) {
-        synthRef.current.cancel();
-      }
-      speakSentence();
-    }
-  }, [ttsSpeed]);
 
   const renderDescription = (description) => {
     const parts = description.split(/(\*\*.*?\*\*)/);
@@ -205,25 +103,7 @@ export default function ReciteCard({ recitationData, onRateCard }) {
     });
   };
 
-  const renderSentencesHighlight = (description) => {
-    const parts = description.split(/([。！吗？；;!?\n])/);
-    const sentences = [];
-    for (let i = 0; i < parts.length; i += 2) {
-      const sentence = (parts[i] || '') + (parts[i + 1] || '');
-      if (sentence.trim()) {
-        sentences.push(sentence);
-      }
-    }
 
-    return sentences.map((sentence, index) => {
-      const isCurrentSpoken = isSpeaking && (activeSentenceIndex === index + 2);
-      return (
-        <span key={index} className={isCurrentSpoken ? 'tts-reading-sentence' : ''}>
-          {renderDescription(sentence)}
-        </span>
-      );
-    });
-  };
 
   if (!currentCard) {
     return (
@@ -292,7 +172,7 @@ export default function ReciteCard({ recitationData, onRateCard }) {
             <div className="card-content-header" style={{ marginBottom: '0.5rem' }}>
               <span>{currentCard.question}</span>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                {currentCard.chapter} • 三合一复习卡
+                {currentCard.chapter} • 双合一复习卡
               </span>
             </div>
             
@@ -304,26 +184,8 @@ export default function ReciteCard({ recitationData, onRateCard }) {
                   🧩 填空背诵要点
                 </span>
                 <div style={{ color: 'var(--text-primary)' }}>
-                  {renderSentencesHighlight(currentCard.cloze_answer)}
+                  {renderDescription(currentCard.cloze_answer)}
                 </div>
-              </div>
-
-              {/* Short answer section */}
-              <div className="card-point-item" style={{ fontSize: '0.95rem', lineHeight: '1.6', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
-                <span className="point-concept" style={{ color: 'var(--info)', fontWeight: '600', marginRight: '0.5rem', display: 'block', marginBottom: '0.25rem' }}>
-                  ✍️ 简答框架大类
-                </span>
-                <div style={{ color: 'var(--text-primary)', whiteSpace: 'pre-line', marginBottom: '0.5rem' }}>
-                  {currentCard.short_answer}
-                </div>
-                {currentCard.short_score_points && currentCard.short_score_points.length > 0 && (
-                  <div style={{ fontSize: '0.8rem', background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '4px' }}>
-                    <strong style={{ color: 'var(--text-secondary)' }}>核心得分点：</strong>
-                    <ul style={{ paddingLeft: '1.2rem', marginTop: '0.25rem', color: 'var(--text-muted)', textAlign: 'left' }}>
-                      {currentCard.short_score_points.map((pt, idx) => <li key={idx}>{pt}</li>)}
-                    </ul>
-                  </div>
-                )}
               </div>
 
               {/* Essay section */}
@@ -344,31 +206,6 @@ export default function ReciteCard({ recitationData, onRateCard }) {
                 )}
               </div>
 
-            </div>
-            
-            {/* Embedded Audio Guide Controls */}
-            <div className="tts-controls-panel glass-panel" style={{ marginTop: '0.75rem', background: 'rgba(0, 0, 0, 0.25)', padding: '0.5rem 0.75rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
-                <button className="tts-play-btn" onClick={toggleTTS} title={isSpeaking ? "停止" : "朗读带背"} style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {isSpeaking ? '⏹️' : '▶️'}
-                </button>
-                <span style={{ fontSize: '0.75rem', fontWeight: '500' }}>
-                  {isSpeaking ? '正在朗读三合一卡片背诵内容...' : '语音朗读卡片'}
-                </span>
-              </div>
-              
-              <div className="tts-speed-slider" style={{ gap: '0.5rem' }}>
-                <span style={{ fontSize: '0.7rem' }}>语速 {ttsSpeed.toFixed(1)}x</span>
-                <input 
-                  type="range" 
-                  min="0.6" 
-                  max="1.6" 
-                  step="0.1" 
-                  value={ttsSpeed} 
-                  onChange={(e) => setTtsSpeed(parseFloat(e.target.value))} 
-                  style={{ width: '60px' }}
-                />
-              </div>
             </div>
           </div>
           

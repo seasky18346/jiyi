@@ -49,9 +49,23 @@ const SCHEDULER_RULES = {
   }
 };
 
-// Initialize database schema (Redesigned for tri-answer weighted model)
+// Initialize database schema (Redesigned for bi-answer weighted model)
 export async function initDb() {
-  console.log('Initializing PostgreSQL Database (Weighted Tri-Test Schema)...');
+  console.log('Initializing PostgreSQL Database (Weighted Bi-Test Schema)...');
+
+  // Automated rebuild check: if questions table has short_answer column, drop all tables to start clean
+  try {
+    const colCheck = await query(`
+      SELECT column_name FROM information_schema.columns 
+      WHERE table_name = 'questions' AND column_name = 'short_answer'
+    `);
+    if (colCheck.rows.length > 0) {
+      console.log('Detected old columns (short_answer) in questions table. Rebuilding database schema...');
+      await query('DROP TABLE IF EXISTS question_tags, answers_history, review_states, questions, tags CASCADE');
+    }
+  } catch (err) {
+    console.warn('Database column check failed or table not created yet:', err.message);
+  }
   
   // 1. Create tags table
   await query(`
@@ -71,8 +85,6 @@ export async function initDb() {
       chapter VARCHAR(255) DEFAULT '未分类',
       cloze_answer TEXT NOT NULL,                -- 填空题标准答案
       cloze_keywords JSONB DEFAULT '[]'::jsonb,  -- 填空题需填入的关键词列表
-      short_answer TEXT NOT NULL,                -- 简答题标准答案
-      short_score_points JSONB DEFAULT '[]'::jsonb, -- 简答题框架得分点
       full_answer TEXT NOT NULL,                 -- 论述题标准答案
       full_score_points JSONB DEFAULT '[]'::jsonb,  -- 论述题全部细节得分点
       difficulty INTEGER DEFAULT 3,
@@ -97,11 +109,9 @@ export async function initDb() {
       id SERIAL PRIMARY KEY,
       question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
       cloze_score NUMERIC,
-      short_score NUMERIC,
       full_score NUMERIC,
       total_score NUMERIC NOT NULL,
       cloze_answers JSONB,
-      short_answer_input TEXT,
       full_answer_input TEXT,
       ai_feedback JSONB,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -149,11 +159,7 @@ async function seedDefaultData() {
       chapter: "第一章 地理信息系统基础理论",
       cloze_answer: "关于地理实体性质、特征和运动状态的**原始描述**或**事实记录**。特点是**原始性、未加工**。",
       cloze_keywords: ["原始描述", "事实记录", "原始性、未加工"],
-      short_answer: "关于地理实体性质、特征和运动状态的原始描述或事实记录。特点是原始性、未加工。",
-      short_score_points: [
-        "关于地理实体特征和运动状态的描述",
-        "具有原始性和未加工的特点"
-      ],
+      
       full_answer: "关于地理实体性质、特征和运动状态的原始描述或事实记录。特点是原始性、未加工。地理数据不仅包含了空间位置特征，还包括了属性特征、时间特征等描述性信息，是地理学和GIS处理与分析的最基础对象。",
       full_score_points: [
         "对地理实体性质特征的描述",
@@ -170,14 +176,7 @@ async function seedDefaultData() {
       chapter: "第一章 地理信息系统基础理论",
       cloze_answer: "地理信息系统（GIS）主要由**硬件系统**、**软件系统**、**地理数据**、**系统人员**和**方法与模型**五个核心部分构成。",
       cloze_keywords: ["硬件系统", "软件系统", "地理数据", "系统人员", "方法与模型"],
-      short_answer: "地理信息系统主要由五个部分构成：硬件系统、软件系统、地理数据、系统人员、方法与模型。",
-      short_score_points: [
-        "硬件系统",
-        "软件系统",
-        "地理数据",
-        "系统人员",
-        "方法与模型"
-      ],
+      
       full_answer: "地理信息系统（GIS）主要由以下五个核心部分构成：\n1. 硬件系统：包括计算机主机、网络设备、数字化仪、扫描仪、绘图仪等物理基础；\n2. 软件系统：提供数据输入、存储、管理、空间分析和制图输出等核心软件工具；\n3. 地理数据：系统分析和处理的核心对象，包含空间几何数据和属性描述数据，是系统建库的灵魂；\n4. 系统人员：包括系统开发人员、管理决策人员以及最终用户，是决定GIS成败的关键；\n5. 方法与模型：科学的数据组织、空间分析流程和规程模型，是系统解决复杂空间决策的重要途径。",
       full_score_points: [
         "硬件系统（物理主机与外设）",
@@ -193,8 +192,8 @@ async function seedDefaultData() {
 
   for (const q of defaultData) {
     const qInsert = await query(`
-      INSERT INTO questions (question, subject, chapter, cloze_answer, cloze_keywords, short_answer, short_score_points, full_answer, full_score_points, difficulty, importance)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      INSERT INTO questions (question, subject, chapter, cloze_answer, cloze_keywords, full_answer, full_score_points, difficulty, importance)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING id
     `, [
       q.question,
@@ -202,8 +201,6 @@ async function seedDefaultData() {
       q.chapter,
       q.cloze_answer,
       JSON.stringify(q.cloze_keywords),
-      q.short_answer,
-      JSON.stringify(q.short_score_points),
       q.full_answer,
       JSON.stringify(q.full_score_points),
       q.difficulty,
@@ -264,7 +261,7 @@ export async function getQuestions(filters = {}) {
   }
 
   if (filters.search) {
-    sql += ` AND (q.question ILIKE $${paramCount} OR q.full_answer ILIKE $${paramCount} OR q.short_answer ILIKE $${paramCount})`;
+    sql += ` AND q.question ILIKE $${paramCount}`;
     params.push(`%${filters.search}%`);
     paramCount++;
   }
@@ -275,7 +272,6 @@ export async function getQuestions(filters = {}) {
   return res.rows.map(row => ({
     ...row,
     cloze_keywords: typeof row.cloze_keywords === 'string' ? JSON.parse(row.cloze_keywords) : row.cloze_keywords,
-    short_score_points: typeof row.short_score_points === 'string' ? JSON.parse(row.short_score_points) : row.short_score_points,
     full_score_points: typeof row.full_score_points === 'string' ? JSON.parse(row.full_score_points) : row.full_score_points
   }));
 }
@@ -299,7 +295,6 @@ export async function getQuestion(id) {
   return {
     ...row,
     cloze_keywords: typeof row.cloze_keywords === 'string' ? JSON.parse(row.cloze_keywords) : row.cloze_keywords,
-    short_score_points: typeof row.short_score_points === 'string' ? JSON.parse(row.short_score_points) : row.short_score_points,
     full_score_points: typeof row.full_score_points === 'string' ? JSON.parse(row.full_score_points) : row.full_score_points
   };
 }
@@ -309,14 +304,14 @@ export async function createQuestion(q) {
   const { 
     question, subject, chapter, 
     cloze_answer, cloze_keywords, 
-    short_answer, short_score_points, 
+    
     full_answer, full_score_points, 
     difficulty, importance 
   } = q;
   
   const qInsert = await query(`
-    INSERT INTO questions (question, subject, chapter, cloze_answer, cloze_keywords, short_answer, short_score_points, full_answer, full_score_points, difficulty, importance)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    INSERT INTO questions (question, subject, chapter, cloze_answer, cloze_keywords, full_answer, full_score_points, difficulty, importance)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     RETURNING id
   `, [
     question,
@@ -324,8 +319,6 @@ export async function createQuestion(q) {
     chapter || '未分类',
     cloze_answer,
     JSON.stringify(cloze_keywords || []),
-    short_answer,
-    JSON.stringify(short_score_points || []),
     full_answer,
     JSON.stringify(full_score_points || []),
     difficulty || 3,
@@ -363,7 +356,7 @@ export async function updateQuestion(id, q) {
   const { 
     question, subject, chapter, 
     cloze_answer, cloze_keywords, 
-    short_answer, short_score_points, 
+    
     full_answer, full_score_points, 
     difficulty, importance 
   } = q;
@@ -371,17 +364,14 @@ export async function updateQuestion(id, q) {
   await query(`
     UPDATE questions
     SET question = $1, subject = $2, chapter = $3, cloze_answer = $4, cloze_keywords = $5,
-        short_answer = $6, short_score_points = $7, full_answer = $8, full_score_points = $9,
-        difficulty = $10, importance = $11, updated_at = CURRENT_TIMESTAMP
-    WHERE id = $12
+        full_answer = $6, full_score_points = $7, difficulty = $8, importance = $9, updated_at = CURRENT_TIMESTAMP
+    WHERE id = $10
   `, [
     question,
     subject,
     chapter,
     cloze_answer,
     JSON.stringify(cloze_keywords || []),
-    short_answer,
-    JSON.stringify(short_score_points || []),
     full_answer,
     JSON.stringify(full_score_points || []),
     difficulty,
@@ -439,7 +429,6 @@ export async function getTodayReviews() {
     const r = {
       ...row,
       cloze_keywords: typeof row.cloze_keywords === 'string' ? JSON.parse(row.cloze_keywords) : row.cloze_keywords,
-      short_score_points: typeof row.short_score_points === 'string' ? JSON.parse(row.short_score_points) : row.short_score_points,
       full_score_points: typeof row.full_score_points === 'string' ? JSON.parse(row.full_score_points) : row.full_score_points
     };
 
@@ -469,21 +458,19 @@ export async function getTodayReviews() {
 
 // Log answer attempt (with tri-scores) and schedule next spaced review
 export async function saveGrade(questionId, detailScores, inputs, aiFeedback) {
-  const { clozeScore, shortScore, fullScore, totalScore } = detailScores;
-  const { clozeAnswers, shortAnswerInput, fullAnswerInput } = inputs;
+  const { clozeScore, fullScore, totalScore } = detailScores;
+  const { clozeAnswers, fullAnswerInput } = inputs;
 
   // 1. Insert history log
   await query(`
-    INSERT INTO answers_history (question_id, cloze_score, short_score, full_score, total_score, cloze_answers, short_answer_input, full_answer_input, ai_feedback)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    INSERT INTO answers_history (question_id, cloze_score, full_score, total_score, cloze_answers, full_answer_input, ai_feedback)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
   `, [
     questionId, 
     clozeScore, 
-    shortScore, 
     fullScore, 
     totalScore, 
     JSON.stringify(clozeAnswers || {}), 
-    shortAnswerInput, 
     fullAnswerInput, 
     JSON.stringify(aiFeedback)
   ]);
@@ -570,7 +557,7 @@ export async function rateCard(questionId, rating) {
 
   // Save history log
   await query(`
-    INSERT INTO answers_history (question_id, total_score, short_answer_input, ai_feedback)
+    INSERT INTO answers_history (question_id, total_score, full_answer_input, ai_feedback)
     VALUES ($1, $2, $3, $4)
   `, [
     questionId, 

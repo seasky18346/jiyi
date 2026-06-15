@@ -137,10 +137,8 @@ app.post('/api/questions', async (req, res) => {
     // Auto-populating default values for backward compatibility
     if (!q.full_answer && q.standard_answer) q.full_answer = q.standard_answer;
     if (!q.cloze_answer && q.standard_answer) q.cloze_answer = q.standard_answer;
-    if (!q.short_answer && q.standard_answer) q.short_answer = q.standard_answer;
     
     if (!q.cloze_answer) q.cloze_answer = q.question || '';
-    if (!q.short_answer) q.short_answer = q.question || '';
     if (!q.full_answer) q.full_answer = q.question || '';
     
     if (!q.cloze_keywords || q.cloze_keywords.length === 0) {
@@ -156,9 +154,6 @@ app.post('/api/questions', async (req, res) => {
       q.cloze_keywords = keywords;
     }
 
-    if (!q.short_score_points || q.short_score_points.length === 0) {
-      q.short_score_points = q.short_answer.split(/[。！；;!?\n]/).map(s => s.trim()).filter(s => s.length > 4);
-    }
     if (!q.full_score_points || q.full_score_points.length === 0) {
       q.full_score_points = q.full_answer.split(/[。！；;!?\n]/).map(s => s.trim()).filter(s => s.length > 4);
     }
@@ -205,7 +200,7 @@ app.get('/api/today-reviews', async (req, res) => {
 // 7. Secure AI Grading API with DB History Logging (Combined Grading)
 app.post('/api/ai/grade', async (req, res) => {
   try {
-    const { questionId, clozeScore, clozeAnswers, shortAnswerInput, fullAnswerInput } = req.body;
+    const { questionId, clozeScore, clozeAnswers, fullAnswerInput } = req.body;
 
     if (!questionId) {
       return res.status(400).json({ success: false, message: 'questionId is required' });
@@ -224,11 +219,7 @@ app.post('/api/ai/grade', async (req, res) => {
     // Call AI if enabled, otherwise fallback to local keyword matching
     if (process.env.AI_API_KEY && process.env.ENABLE_AI_GRADING !== 'false') {
       try {
-        const systemPrompt = `你是一位专业的考研专业课阅卷教师。你需要同时对【简答题部分】和【论述题部分】的学生作答进行评审和评分（0-10分制，评分必须为整数）。
-
-简答题评分原则：
-- 重在框架与核心类别：学生作答时，主要大类（框架、主要分类、核心论点）对得上，且大类后稍微跟有一句合理的简短解释即可得分。
-- 解释句的文字表述不需要和标准答案逐字一致，意思正确即可。
+        const systemPrompt = `你是一位专业的考研专业课阅卷教师。你需要对【论述题部分】的学生作答进行评审和评分（0-10分制，评分必须为整数）。
 
 论述题评分原则（较为严格）：
 - 强调全面性与论述深度：学生必须尽可能答出标准答案的所有核心要点和组成部分。
@@ -236,16 +227,6 @@ app.post('/api/ai/grade', async (req, res) => {
 
 你必须输出且仅输出一个合法的 JSON 格式对象，结构如下：
 {
-  "short_evaluation": {
-    "score": 8,
-    "full_score": 10,
-    "level": "基本掌握",
-    "covered_points": ["对上的第1个大类框架", "对上的第2个大类框架"],
-    "missing_points": ["漏掉的第1个大类框架", "漏掉的第2个大类框架"],
-    "wrong_points": ["表述不准确或概念混淆的内容"],
-    "suggestion": "关于简答题框架与要点的改进建议",
-    "exam_comment": "简答题短评，字数在100字以内"
-  },
   "full_evaluation": {
     "score": 7,
     "full_score": 10,
@@ -261,20 +242,12 @@ app.post('/api/ai/grade', async (req, res) => {
 
         const userPrompt = `题目：${questionData.question}
 
-【简答题标准参考答案】：
-${questionData.short_answer}
-【简答题要点得分点】：
-${JSON.stringify(questionData.short_score_points || [])}
-
 【论述题标准参考答案】：
 ${questionData.full_answer}
 【论述题细节得分点】：
 ${JSON.stringify(questionData.full_score_points || [])}
 
 --------------------
-【学生作答简答题】：
-"${shortAnswerInput || '（学生未作答）'}"
-
 【学生作答论述题】：
 "${fullAnswerInput || '（学生未作答）'}"`;
 
@@ -282,29 +255,26 @@ ${JSON.stringify(questionData.full_score_points || [])}
         gradingResult = JSON.parse(aiText.trim());
       } catch (err) {
         console.error('LLM API call failed, falling back to local grader:', err);
-        gradingResult = runLocalTriFallbackGrader(shortAnswerInput, fullAnswerInput, questionData);
+        gradingResult = runLocalBiFallbackGrader(fullAnswerInput, questionData);
       }
     } else {
       // Fallback
-      gradingResult = runLocalTriFallbackGrader(shortAnswerInput, fullAnswerInput, questionData);
+      gradingResult = runLocalBiFallbackGrader(fullAnswerInput, questionData);
     }
 
-    const shortScore = gradingResult.short_evaluation?.score !== undefined ? gradingResult.short_evaluation.score : 0;
     const fullScore = gradingResult.full_evaluation?.score !== undefined ? gradingResult.full_evaluation.score : 0;
 
-    // Calculate total score based on weights: Cloze 20%, Short Answer 35%, Essay (Full) 45%
-    const totalScore = parseFloat(((clozeGrade * 0.20) + (shortScore * 0.35) + (fullScore * 0.45)).toFixed(2));
+    // Calculate total score based on weights: Cloze 40%, Essay (Full) 60%
+    const totalScore = parseFloat(((clozeGrade * 0.40) + (fullScore * 0.60)).toFixed(2));
 
     const scores = {
       clozeScore: clozeGrade,
-      shortScore,
       fullScore,
       totalScore
     };
 
     const inputs = {
       clozeAnswers,
-      shortAnswerInput,
       fullAnswerInput
     };
 
@@ -315,10 +285,8 @@ ${JSON.stringify(questionData.full_score_points || [])}
       success: true,
       data: {
         clozeScore: clozeGrade,
-        shortScore,
         fullScore,
         totalScore,
-        short_evaluation: gradingResult.short_evaluation,
         full_evaluation: gradingResult.full_evaluation
       }
     });
@@ -327,16 +295,12 @@ ${JSON.stringify(questionData.full_score_points || [])}
   }
 });
 
-// Helper: Local scoring fallback for both short and full answers
-function runLocalTriFallbackGrader(shortAnswerInput, fullAnswerInput, questionData) {
-  const shortPoints = questionData.short_score_points || [];
+// Helper: Local scoring fallback for essay answers
+function runLocalBiFallbackGrader(fullAnswerInput, questionData) {
   const fullPoints = questionData.full_score_points || [];
-  
-  const shortGrading = runLocalSingleGrader(shortAnswerInput, shortPoints, "简答题");
   const fullGrading = runLocalSingleGrader(fullAnswerInput, fullPoints, "论述题");
   
   return {
-    short_evaluation: shortGrading,
     full_evaluation: fullGrading
   };
 }
@@ -418,13 +382,11 @@ app.post('/api/cloze/grade', async (req, res) => {
     const userAnswer = `[填空自测] 答案记录: ${JSON.stringify(answers)}`;
     const scores = {
       clozeScore: score,
-      shortScore: score,
       fullScore: score,
       totalScore: score
     };
     const inputs = {
       clozeAnswers: answers,
-      shortAnswerInput: userAnswer,
       fullAnswerInput: userAnswer
     };
     await saveGrade(parseInt(questionId), scores, inputs, { result });
@@ -454,7 +416,6 @@ app.post('/api/questions/import', async (req, res) => {
       const parsed = Array.isArray(content) ? content : JSON.parse(content);
       for (const q of parsed) {
         const cloze_answer = q.cloze_answer || q.standard_answer || q.description || '';
-        const short_answer = q.short_answer || q.standard_answer || q.description || '';
         const full_answer = q.full_answer || q.standard_answer || q.description || '';
 
         // Extract cloze keywords if not provided
@@ -470,9 +431,6 @@ app.post('/api/questions/import', async (req, res) => {
           }
         }
 
-        const short_score_points = q.short_score_points || q.score_points || 
-          short_answer.split(/[。！；;!?\n]/).map(s => s.trim()).filter(s => s.length > 5);
-
         const full_score_points = q.full_score_points || q.score_points || 
           full_answer.split(/[。！；;!?\n]/).map(s => s.trim()).filter(s => s.length > 5);
 
@@ -482,8 +440,6 @@ app.post('/api/questions/import', async (req, res) => {
           chapter: q.chapter || '未分类',
           cloze_answer,
           cloze_keywords,
-          short_answer,
-          short_score_points,
           full_answer,
           full_score_points,
           difficulty: q.difficulty || 3,
@@ -542,8 +498,6 @@ app.post('/api/questions/import', async (req, res) => {
               chapter: currentChapter,
               cloze_answer: description,
               cloze_keywords: keywords,
-              short_answer: description,
-              short_score_points: points,
               full_answer: description,
               full_score_points: points,
               difficulty: 3,
@@ -596,16 +550,6 @@ app.post('/api/questions/import', async (req, res) => {
             }
           }
 
-          let shortAnswer = '';
-          let shortScorePoints = [];
-          if (scorePoints.length > 0) {
-            shortAnswer = bulletPointsText;
-            shortScorePoints = [...scorePoints];
-          } else {
-            shortAnswer = normalParagraphsText;
-            shortScorePoints = normalParagraphsText.split(/[。！；;!?\n]/).map(s => s.trim()).filter(s => s.length > 5);
-          }
-
           let fullScorePoints = [];
           if (scorePoints.length > 0) {
             fullScorePoints = [...scorePoints];
@@ -617,9 +561,6 @@ app.post('/api/questions/import', async (req, res) => {
           if (fullScorePoints.length === 0) {
             fullScorePoints = ['请补全详细论述得分点'];
           }
-          if (shortScorePoints.length === 0) {
-            shortScorePoints = ['请补全简答得分点'];
-          }
 
           await createQuestion({
             question: title,
@@ -627,8 +568,6 @@ app.post('/api/questions/import', async (req, res) => {
             chapter: currentChapter,
             cloze_answer: clozeAnswer,
             cloze_keywords: keywords,
-            short_answer: shortAnswer,
-            short_score_points: shortScorePoints,
             full_answer: fullAnswer,
             full_score_points: fullScorePoints,
             difficulty: 3,
@@ -674,22 +613,20 @@ app.post('/api/questions/import-ai', async (req, res) => {
     }
 
     const systemPrompt = `你是一位专业的GIS（地理信息系统）考研专业课辅导老师。请解析用户提供的专业课背诵文本（包含从 Word/Markdown 导入的原始内容，已用 **加粗标出核心词**）。
-你需要识别出文档中的章节名称，并提取出其中的每一个背诵概念/问题，将其整理为“三合一”背诵卡片结构写入数据库。
+注意：你必须且只能将用户给出的这段文本作为一个整体，整理成一张且仅有一张背诵卡片（切记：绝对不能将文本拆分为多个子卡片或小问题！必须是整段内容合并为一张卡片，其题目 question 必须使用整段大题的标题）。
 
-对于提取出的每一个概念/问题，构建如下 JSON 对象：
-1. "question": 概念或问题的名称（例如："地理数据的特征"、"地理信息系统定义"）。不要包含前面的数字序号。
+构建如下 JSON 格式对象：
+1. "question": 大题的标题/概念名称（例如："地理数据和地理信息"、"地理数据的特征"、"地理信息系统的基本特征"）。不要包含数字序号（如去掉 "1、"）。
 2. "subject": 学科科目名称，如果没有从文中识别出，默认使用 "${defaultSubject || '专业课'}"。
 3. "chapter": 章节名称（例如："地理信息系统基础理论"、"GIS组成、功能与应用"）。如果从文中识别出如“X月X日背诵内容：XXX”，请以 “XXX” 作为章节名。如果没有识别出，默认使用 "${defaultChapter || '未分类'}"。
-4. "cloze_answer": 填空背诵要点。将原本文本中的核心加粗词保留为 **关键词**。填空题将对这些加粗词进行挖空。
+4. "cloze_answer": 填空背诵要点。将原本文本的所有内容完整保留，同时必须保留原本的加粗格式（使用 **加粗核心词**），用于填空时挖空这些加粗词。
 5. "cloze_keywords": 从 cloze_answer 中提取的所有被 ** 包裹的关键词数组（例如：["空间分布性", "空间定位"]），去除星号本身。
-6. "short_answer": 简答框架大类。整理出要点大类标题，去除过于累赘的详细展开，适合快速记忆框架（例如："（1）空间相关性：空间上越接近相关性越强。\n（2）空间区域性：按区域组织与应用。"）。
-7. "short_score_points": 简答题核心得分点数组（通常是每个大类框架的标题核心词，例如：["空间相关性", "空间区域性", "空间多样性", "空间层次性"]）。
-8. "full_answer": 论述展开细节。包含最完整的详细展开内容，字数要求饱满详实。
-9. "full_score_points": 详细得分点数组。用于与用户的长答案进行匹配打分（通常是每个大要点加上其核心解释的组合，例如：["空间相关性：空间依赖性（地理学第一定律）", "空间区域性：按区域组织应用"]）。
-10. "difficulty": 难度 (1-5 整数，默认3)。
-11. "importance": 重要度 (1-5 整数，默认3)。
+6. "full_answer": 论述展开细节。包含这道大题的全部详细展开内容，字数要求饱满详实。
+7. "full_score_points": 详细得分点数组。用于与用户的长答案进行匹配打分（通常是各个大要点及其核心解释的组合，例如：["空间相关性：空间依赖性（地理学第一定律）", "空间区域性：按区域组织应用"]）。
+8. "difficulty": 难度 (1-5 整数，默认3)。
+9. "importance": 重要度 (1-5 整数，默认3)。
 
-你必须输出且仅输出一个合法的 JSON 格式对象，结构如下：
+你必须输出且仅输出一个包含唯一卡片对象的 JSON 格式对象，结构如下：
 {
   "questions": [
     {
@@ -698,8 +635,6 @@ app.post('/api/questions/import-ai', async (req, res) => {
       "chapter": "...",
       "cloze_answer": "...",
       "cloze_keywords": ["...", "..."],
-      "short_answer": "...",
-      "short_score_points": ["...", "..."],
       "full_answer": "...",
       "full_score_points": ["...", "..."],
       "difficulty": 3,
@@ -738,8 +673,6 @@ app.post('/api/questions/import-ai', async (req, res) => {
         chapter: q.chapter || defaultChapter || '未分类',
         cloze_answer: q.cloze_answer,
         cloze_keywords: q.cloze_keywords || [],
-        short_answer: q.short_answer,
-        short_score_points: q.short_score_points || [],
         full_answer: q.full_answer,
         full_score_points: q.full_score_points || [],
         difficulty: parseInt(q.difficulty || '3') || 3,

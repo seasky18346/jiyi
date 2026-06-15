@@ -22,9 +22,9 @@ export default function Dashboard({ onNavigate }) {
     }
   };
 
-  // Calculate countdown to KAO YAN (postgraduate entrance exam) - typical date is Dec 20, 2026
+  // Calculate countdown to KAO YAN (postgraduate entrance exam) - typical date is Dec 19, 2026 for 2027 exam
   const getExamCountdown = () => {
-    const examDate = new Date('2026-12-20T00:00:00');
+    const examDate = new Date('2026-12-19T00:00:00');
     const now = new Date();
     const diff = examDate - now;
     if (diff <= 0) return 0;
@@ -116,7 +116,7 @@ export default function Dashboard({ onNavigate }) {
             {/* Countdown and info */}
             <div style={{ flex: 1, minWidth: '180px' }}>
               <h3 style={{ fontFamily: 'var(--font-display)', marginBottom: '0.3rem', fontSize: '1.1rem' }}>
-                📅 2026 考研冲刺倒计时
+                📅 2027 考研冲刺倒计时
               </h3>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem' }}>
                 <span style={{ fontSize: '2.5rem', fontWeight: '900', color: countdown < 50 ? 'var(--danger)' : 'var(--primary)', fontFamily: 'var(--font-display)' }}>

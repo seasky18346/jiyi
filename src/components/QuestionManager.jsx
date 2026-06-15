@@ -11,17 +11,14 @@ export default function QuestionManager() {
   const [typeFilter, setTypeFilter] = useState('');
   const [searchFilter, setSearchFilter] = useState('');
   
-  // Form states (Tri-Test Schema)
+  // Form states (Bi-Test Schema)
   const [formQuestion, setFormQuestion] = useState('');
-  const [formType, setFormType] = useState('三合一综合题');
+  const [formType, setFormType] = useState('二合一题');
   const [formSubject, setFormSubject] = useState('地理信息系统');
   const [formChapter, setFormChapter] = useState('第一章 地理信息系统基础理论');
   
   const [formClozeAnswer, setFormClozeAnswer] = useState('');
   const [formClozeKeywords, setFormClozeKeywords] = useState('');
-  
-  const [formShortAnswer, setFormShortAnswer] = useState('');
-  const [formShortScorePoints, setFormShortScorePoints] = useState(['']);
   
   const [formFullAnswer, setFormFullAnswer] = useState('');
   const [formFullScorePoints, setFormFullScorePoints] = useState(['']);
@@ -38,17 +35,16 @@ export default function QuestionManager() {
   const [importUseAI, setImportUseAI] = useState(false);
   const [importSubject, setImportSubject] = useState('');
   const [importChapter, setImportChapter] = useState('');
+  const [copySuccess, setCopySuccess] = useState(false);
 
   useEffect(() => {
     fetchQuestions();
-  }, [subjectFilter, chapterFilter, typeFilter]);
+  }, [subjectFilter, searchFilter]);
 
   const fetchQuestions = async () => {
     try {
       const queryParams = new URLSearchParams();
       if (subjectFilter) queryParams.append('subject', subjectFilter);
-      if (chapterFilter) queryParams.append('chapter', chapterFilter);
-      if (typeFilter) queryParams.append('type', typeFilter);
       if (searchFilter) queryParams.append('search', searchFilter);
 
       const res = await fetch(`/api/questions?${queryParams.toString()}`);
@@ -71,21 +67,13 @@ export default function QuestionManager() {
     setSelectedQuestion(q);
     setIsEditing(true);
 
-    // Populate form
     setFormQuestion(q.question);
-    setFormType(q.type || '三合一综合题');
+    setFormType(q.type || '二合一题');
     setFormSubject(q.subject || '');
     setFormChapter(q.chapter || '');
     
     setFormClozeAnswer(q.cloze_answer || '');
     setFormClozeKeywords((q.cloze_keywords || []).join(', '));
-    
-    setFormShortAnswer(q.short_answer || '');
-    if (q.short_score_points && q.short_score_points.length > 0) {
-      setFormShortScorePoints(q.short_score_points);
-    } else {
-      setFormShortScorePoints(['']);
-    }
     
     setFormFullAnswer(q.full_answer || '');
     if (q.full_score_points && q.full_score_points.length > 0) {
@@ -103,34 +91,17 @@ export default function QuestionManager() {
     setSelectedQuestion(null);
     setIsEditing(true);
 
-    // Reset form
     setFormQuestion('');
-    setFormType('三合一综合题');
+    setFormType('二合一题');
     setFormSubject('地理信息系统');
     setFormChapter('第一章 地理信息系统基础理论');
     setFormClozeAnswer('');
     setFormClozeKeywords('');
-    setFormShortAnswer('');
-    setFormShortScorePoints(['']);
     setFormFullAnswer('');
     setFormFullScorePoints(['']);
     setFormKnowledgePoints('');
     setFormDifficulty(3);
     setFormImportance(3);
-  };
-
-  const handleShortScorePointChange = (index, value) => {
-    const updated = [...formShortScorePoints];
-    updated[index] = value;
-    setFormShortScorePoints(updated);
-  };
-
-  const addShortScorePointInput = () => {
-    setFormShortScorePoints([...formShortScorePoints, '']);
-  };
-
-  const removeShortScorePointInput = (index) => {
-    setFormShortScorePoints(formShortScorePoints.filter((_, i) => i !== index));
   };
 
   const handleFullScorePointChange = (index, value) => {
@@ -152,7 +123,6 @@ export default function QuestionManager() {
 
     // Prepare keywords and score points
     const cloze_keywords = formClozeKeywords.split(/[,，]/).map(s => s.trim()).filter(Boolean);
-    const short_score_points = formShortScorePoints.map(s => s.trim()).filter(Boolean);
     const full_score_points = formFullScorePoints.map(s => s.trim()).filter(Boolean);
     const knowledge_points = formKnowledgePoints.split(/[,，]/).map(s => s.trim()).filter(Boolean);
 
@@ -163,8 +133,6 @@ export default function QuestionManager() {
       chapter: formChapter,
       cloze_answer: formClozeAnswer,
       cloze_keywords,
-      short_answer: formShortAnswer,
-      short_score_points,
       full_answer: formFullAnswer,
       full_score_points,
       knowledge_points,
@@ -406,10 +374,9 @@ export default function QuestionManager() {
           <input 
             type="text" 
             className="form-input-text" 
-            placeholder="搜索题目或答案要点... (回车键)" 
+            placeholder="搜索题目关键词..." 
             value={searchFilter}
             onChange={(e) => setSearchFilter(e.target.value)}
-            onKeyPress={handleSearchKeyPress}
             style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
           />
           
@@ -421,28 +388,6 @@ export default function QuestionManager() {
           >
             <option value="">全部科目</option>
             {subjects.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-
-          <select 
-            className="form-input-text" 
-            value={chapterFilter}
-            onChange={(e) => setChapterFilter(e.target.value)}
-            style={{ padding: '0.35rem', fontSize: '0.8rem', height: 'auto' }}
-          >
-            <option value="">全部章节</option>
-            {chapters.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-
-          <select 
-            className="form-input-text" 
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            style={{ padding: '0.35rem', fontSize: '0.8rem', height: 'auto' }}
-          >
-            <option value="">全部题型</option>
-            <option value="名词解释">名词解释</option>
-            <option value="简答题">简答题</option>
-            <option value="论述题">论述题</option>
           </select>
         </div>
 
@@ -456,7 +401,7 @@ export default function QuestionManager() {
                 onClick={() => handleSelectQuestion(q)}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                  <span>{q.type}</span>
+                  <span>二合一题</span>
                   <span>Box {q.mastery_level || 0}</span>
                 </div>
                 <div className="sidebar-item-title" style={{ fontSize: '0.85rem', fontWeight: '500' }}>
@@ -511,11 +456,8 @@ export default function QuestionManager() {
               {/* Type */}
               <div className="form-group">
                 <label>题型</label>
-                <select className="form-input-text" value={formType} onChange={(e) => setFormType(e.target.value)}>
-                  <option value="三合一综合题">三合一综合题</option>
-                  <option value="名词解释">名词解释</option>
-                  <option value="简答题">简答题</option>
-                  <option value="论述题">论述题</option>
+                <select className="form-input-text" value={formType} onChange={(e) => setFormType(e.target.value)} disabled>
+                  <option value="二合一题">二合一题</option>
                 </select>
               </div>
  
@@ -610,48 +552,7 @@ export default function QuestionManager() {
               </div>
             </div>
 
-            {/* Section 2: Short Answer */}
-            <div className="glass-panel" style={{ padding: '1rem', background: 'rgba(255,255,255,0.01)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <strong style={{ color: 'var(--info)', fontSize: '0.9rem' }}>✍️ 简答框架设定 (Short Answer)</strong>
-              
-              <div className="form-group">
-                <label>简答标准框架答案</label>
-                <textarea 
-                  className="form-input-text" 
-                  value={formShortAnswer} 
-                  onChange={(e) => setFormShortAnswer(e.target.value)} 
-                  placeholder="提供框架分类和简短解释的框架结构..."
-                  style={{ minHeight: '100px', resize: 'vertical', fontSize: '0.85rem' }} 
-                  required
-                />
-              </div>
 
-              <div className="form-group" style={{ gap: '0.5rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label>简答要点得分点 (判定依据)</label>
-                  <button type="button" className="text-btn" onClick={addShortScorePointInput} style={{ padding: '0.1rem 0.5rem', fontSize: '0.75rem' }}>
-                    ➕ 添加得分点
-                  </button>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {formShortScorePoints.map((pt, idx) => (
-                    <div key={idx} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>#{idx + 1}</span>
-                      <input 
-                        type="text" 
-                        className="form-input-text" 
-                        value={pt} 
-                        onChange={(e) => handleShortScorePointChange(idx, e.target.value)} 
-                        placeholder="例如: 硬件系统"
-                      />
-                      <button type="button" onClick={() => removeShortScorePointInput(idx)} style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}>
-                        🗑️
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
 
             {/* Section 3: Essay */}
             <div className="glass-panel" style={{ padding: '1rem', background: 'rgba(255,255,255,0.01)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -800,27 +701,72 @@ export default function QuestionManager() {
               </div>
             </form>
 
-            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-              {importUseAI ? (
-                <>
-                  <strong>💡 AI 智能解析说明：</strong>
-                  <ul style={{ paddingLeft: '1.2rem', marginTop: '0.3rem', lineHeight: '1.5' }}>
-                    <li>可以直接解析<strong>包含加粗重点</strong>（用 <code>**加粗**</code> 或 Word 中的加黑体表示）的普通文本。</li>
-                    <li>AI 会将加粗的核心词汇提取为填空词。</li>
-                    <li>AI 会自动将问答题分解为简答题框架与论述题细节，无需人工转换格式。</li>
-                  </ul>
-                </>
-              ) : (
-                <>
-                  <strong>💡 Markdown 解析说明：</strong>
-                  <ul style={{ paddingLeft: '1.2rem', marginTop: '0.3rem', lineHeight: '1.5' }}>
-                    <li><code># [学科名称]</code> 将定义所属科目。</li>
-                    <li><code>## [章节名称]</code> 将定义所属章节，并以此作为知识点默认标签。</li>
-                    <li><code>* **概念**：标准定义</code> 结构会自动识别为名词解释。</li>
-                    <li><code>### 标题</code> 下的段落会被解析为简答/论述题的答案，列表项 <code>* 得分点</code> 会被解析为判定得分点。</li>
-                  </ul>
-                </>
-              )}
+            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem', color: 'var(--text-muted)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <strong style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>🤖 测绘地理信息学考研整理助手 Prompt：</strong>
+                <button 
+                  type="button" 
+                  className="text-btn"
+                  onClick={() => {
+                    const promptText = `你现在是一个专业的测绘地理信息学考研辅导助手。请帮我整理今天新增的专业课背诵内容。
+
+【工作基准与流程】
+1. 基准数据源：以 "D:\\考研\\专业课每日背诵" 下面最新日期新增的 Word 文件（如 MMDD.docx）为基准。
+2. 保持本源的简洁性：如果源文档中的概念描述已经足够简洁（例如仅做分类列举或简单概括），允许保持，勿私自扩充详细解释或举例（如果扩充了要通知我）（如高程系统、尺度等，以防太加重背诵负担）。
+3. 专业度弥补：当源文档中某些专业术语出现白话文口语表达、或者逻辑残缺不全难以在考试中采分时，去 "D:\\考研\\806测绘地理信息学" 和 "D:\\考研\\测量学" 目录中提取教材的高分原话进行局部替换或补充。
+4. 核心加粗：对所有核心采分词（如坐标系名称、起算基准、关键参数等）进行 **加粗** 处理。
+
+【输出要求】
+整理完毕后，不要更新到每日背诵汇总（汇总.md/.docx）中，必须生成一个独立的 Markdown 文件，路径为 "D:\\考研\\专业课每日背诵\\MMDD_整理.md"（其中 MMDD 为最新日期，如 0616）。
+
+请检查目录，并为我处理今天新增的文件。`;
+                    navigator.clipboard.writeText(promptText);
+                    setCopySuccess(true);
+                    setTimeout(() => setCopySuccess(false), 2000);
+                  }}
+                  style={{ 
+                    padding: '0.2rem 0.6rem', 
+                    fontSize: '0.75rem', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.25rem',
+                    backgroundColor: copySuccess ? 'rgba(16, 185, 129, 0.15)' : 'rgba(0, 210, 255, 0.08)',
+                    color: copySuccess ? 'var(--success)' : 'var(--primary)',
+                    border: copySuccess ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(0, 210, 255, 0.2)',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {copySuccess ? '✅ 已复制 Prompt' : '📋 复制 Prompt'}
+                </button>
+              </div>
+              <div style={{ 
+                background: 'rgba(255, 255, 255, 0.02)', 
+                border: '1px solid var(--border-color)', 
+                borderRadius: '6px', 
+                padding: '0.75rem', 
+                fontSize: '0.75rem', 
+                lineHeight: '1.6', 
+                whiteSpace: 'pre-line',
+                color: 'var(--text-secondary)',
+                maxHeight: '220px',
+                overflowY: 'auto',
+                fontFamily: 'monospace',
+                textAlign: 'left'
+              }}>
+                {`你现在是一个专业的测绘地理信息学考研辅导助手。请帮我整理今天新增的专业课背诵内容。
+
+【工作基准与流程】
+1. 基准数据源：以 "D:\\考研\\专业课每日背诵" 下面最新日期新增的 Word 文件（如 MMDD.docx）为基准。
+2. 保持本源的简洁性：如果源文档中的概念描述已经足够简洁（例如仅做分类列举或简单概括），允许保持，勿私自扩充详细解释或举例（如果扩充了要通知我）（如高程系统、尺度等，以防太加重背诵负担）。
+3. 专业度弥补：当源文档中某些专业术语出现白话文口语表达、或者逻辑残缺不全难以在考试中采分时，去 "D:\\考研\\806测绘地理信息学" 和 "D:\\考研\\测量学" 目录中提取教材的高分原话进行局部替换或补充。
+4. 核心加粗：对所有核心采分词（如坐标系名称、起算基准、关键参数等）进行 **加粗** 处理。
+
+【输出要求】
+整理完毕后，不要更新到每日背诵汇总（汇总.md/.docx）中，必须生成一个独立的 Markdown 文件，路径为 "D:\\考研\\专业课每日背诵\\MMDD_整理.md"（其中 MMDD 为最新日期，如 0616）。
+
+请检查目录，并为我处理今天新增的文件。`}
+              </div>
             </div>
           </div>
         )}
