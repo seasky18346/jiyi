@@ -6,8 +6,32 @@ on:
       - main
 
 jobs:
-  deploy:
+  # 阶段 1: 自动编译构建验证 (Build)
+  build:
+    name: Build & Verify Frontend
     runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Compile Frontend Assets
+        run: npm run build
+
+  # 阶段 2: 登录服务器部署应用 (Deploy)
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+    needs: build  # 只有当 build 编译成功后，才会执行部署
 
     steps:
       - name: SSH Deploy Command

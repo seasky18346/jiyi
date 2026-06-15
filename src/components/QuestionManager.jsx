@@ -498,9 +498,6 @@ export default function QuestionManager({ globalImportState, onStartGlobalImport
           <button className="text-btn" onClick={handleExport} style={{ fontSize: '0.8rem', padding: '0.35rem' }}>
             📥 导出完整题库 (JSON)
           </button>
-          <button className="text-btn" onClick={handleClearDb} style={{ fontSize: '0.8rem', color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.2)', padding: '0.35rem' }}>
-            🚨 彻底清空数据库
-          </button>
         </div>
       </div>
 
