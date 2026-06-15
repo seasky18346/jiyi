@@ -7,8 +7,8 @@ function splitTextIntoQuestions(text, defaultChapter) {
   let currentQ = null;
 
   // We look for patterns like:
-  // **1、地理数据和地理信息** or ### 1、地理数据 or 1. 地理数据
-  const headerRegex = /^(?:###\s*|\*\*\s*|\*\s*)?(\d+)[、\.]\s*(.*?)(?:\*\*|$)/;
+  // **1、地理数据和地理信息** or ### 17. 高程基准
+  const headerRegex = /^(?:###\s*|\*\*)(\d+)[、\.]\s*(.*?)(?:\*\*|$)/;
 
   for (let line of lines) {
     const lineStr = line.trim();
