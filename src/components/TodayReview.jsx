@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, BookOpen, RefreshCw, Layers, ChevronRight, CheckCircle2, AlertTriangle, Calendar, Star, CheckSquare, Square } from 'lucide-react';
+import { ArrowLeft, BookOpen, RefreshCw, Layers, ChevronRight, CheckCircle2, AlertTriangle, Calendar, Star, CheckSquare, Square, Sparkles } from 'lucide-react';
 
 export default function TodayReview({ 
   onNavigate, 
@@ -791,143 +791,226 @@ export default function TodayReview({
             <div className="glass-panel" style={{ padding: '1.5rem 2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               
               {/* Header Title */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '1.25rem', marginBottom: '0.5rem' }}>
                 <div>
-                  <h3 style={{ fontSize: '1.25rem', fontFamily: 'var(--font-display)' }}>📊 考评对账与评分报告</h3>
+                  <h3 style={{ fontSize: '1.3rem', fontFamily: 'var(--font-display)', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    ⚡ 记忆强化核对
+                  </h3>
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                    请校对您的关键词与论述。直接自评卡片或调用 AI 诊断错误。
+                    对照本次回忆命中与遗漏情况，背诵强化卡。
                   </p>
                 </div>
                 {gradingResult && (
-                  <div style={{ textAlign: 'right' }}>
-                    <span style={{ fontSize: '1.8rem', fontWeight: '800', color: 'var(--primary)', fontFamily: 'var(--font-display)' }}>
+                  <div style={{ textAlign: 'right', background: 'rgba(0, 210, 255, 0.08)', padding: '0.4rem 0.8rem', borderRadius: '10px', border: '1px solid rgba(0, 210, 255, 0.15)' }}>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>综合评分</span>
+                    <span style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', fontFamily: 'var(--font-display)' }}>
                       {gradingResult.totalScore}
                     </span>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>/10分</span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>/10</span>
                   </div>
                 )}
               </div>
 
-              {/* Selector Tabs if AI results are available */}
-              {gradingResult && (
-                <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
-                  <button 
-                    type="button" 
-                    className={`nav-tab ${activeReportTab === 'comparison' ? 'active' : ''}`}
-                    onClick={() => setActiveReportTab('comparison')}
-                    style={{ fontSize: '0.8rem', padding: '0.3rem 1rem' }}
-                  >
-                    ⚖️ 作答对照
-                  </button>
-                  <button 
-                    type="button" 
-                    className={`nav-tab ${activeReportTab === 'ai' ? 'active' : ''}`}
-                    onClick={() => setActiveReportTab('ai')}
-                    style={{ fontSize: '0.8rem', padding: '0.3rem 1rem' }}
-                  >
-                    🧠 AI 深度诊断
-                  </button>
-                </div>
-              )}
+              {/* Compute Cloze & Essay differences */}
+              {(() => {
+                const { processedParts } = getFilteredClozeParts(currentQ.question, currentQ.cloze_answer);
+                
+                const clozeHits = [];
+                const clozeMisses = [];
+                processedParts.forEach(part => {
+                  if (part.type === 'blank') {
+                    const standardKw = part.text;
+                    const userAnswer = (clozeAnswers[part.inputKey] || '').trim();
+                    if (isClozeAnswerCorrect(userAnswer, standardKw)) {
+                      clozeHits.push(standardKw);
+                    } else {
+                      clozeMisses.push(standardKw);
+                    }
+                  }
+                });
 
-              {/* Tab Content 1: Comparison */}
-              {activeReportTab === 'comparison' && (
-                <div className="animate-fade" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  
-                  {/* Cloze review */}
-                  <div>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>🧩 核心词挖空核对结果</span>
-                    <div style={{ 
-                      padding: '1rem', 
-                      background: 'rgba(0, 0, 0, 0.2)', 
-                      borderRadius: '6px', 
-                      lineHeight: '2.0', 
-                      fontSize: '0.9rem',
-                      border: '1px solid var(--border-color)',
-                      whiteSpace: 'pre-line',
-                      marginTop: '0.3rem'
+                const essayPoints = currentQ.full_score_points || [];
+                const localMatchedEssayPoints = [];
+                const cleanInput = (fullAnswerInput || '').toLowerCase().trim();
+                if (cleanInput) {
+                  essayPoints.forEach(point => {
+                    const cleanedPoint = point.toLowerCase();
+                    const subsegments = cleanedPoint.split(/[,，().（）]/).filter(s => s.trim().length > 3);
+                    const matched = subsegments.length > 0 
+                      ? subsegments.some(sub => cleanInput.includes(sub.trim())) 
+                      : cleanInput.includes(cleanedPoint);
+                    if (matched) {
+                      localMatchedEssayPoints.push(point);
+                    }
+                  });
+                }
+
+                const missingEssayPoints = gradingResult
+                  ? (gradingResult.full_evaluation?.missing_points || [])
+                  : essayPoints.filter(p => !localMatchedEssayPoints.includes(p));
+
+                const wrongEssayPoints = gradingResult
+                  ? (gradingResult.full_evaluation?.wrong_points || [])
+                  : [];
+
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    
+                    {/* Layer 3: 🔥 记忆强化卡 (Highest Visual Priority) */}
+                    <div className="glass-panel" style={{ 
+                      padding: '1.5rem', 
+                      background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.12) 0%, rgba(0, 210, 255, 0.08) 100%)', 
+                      border: '2px solid var(--secondary)',
+                      borderRadius: '16px',
+                      boxShadow: '0 0 20px rgba(139, 92, 246, 0.15), var(--shadow-glow), var(--shadow-md)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.85rem'
                     }}>
-                      {renderClozeText(currentQ.question, currentQ.cloze_answer)}
-                    </div>
-                  </div>
+                      <h4 style={{ 
+                        color: 'var(--text-primary)', 
+                        fontWeight: '800', 
+                        fontSize: '1.05rem', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '0.4rem',
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                        paddingBottom: '0.5rem',
+                        margin: 0
+                      }}>
+                        <Sparkles size={16} style={{ color: 'var(--secondary)' }} />
+                        🔥 记忆强化卡
+                      </h4>
+                      
+                      <div style={{ 
+                        fontSize: '0.9rem', 
+                        fontWeight: '700', 
+                        color: 'var(--primary)',
+                        padding: '0.4rem 0.8rem',
+                        background: 'rgba(0, 210, 255, 0.05)',
+                        borderRadius: '8px',
+                        borderLeft: '3px solid var(--primary)',
+                        lineHeight: '1.4'
+                      }}>
+                        💡 提示：{gradingResult?.full_evaluation?.suggestion || (clozeMisses.length > 0 || missingEssayPoints.length > 0 ? "下一次复习时，请重点关注以下遗漏的必背词和核心得分要点。" : "本次默写表现完美，直接进入下一个周期！")}
+                      </div>
 
-                  {/* Essay Side-by-side or block compare */}
-                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>✍️ 您的默写答案</span>
-                    <div style={{ 
-                      padding: '0.8rem 1rem', 
-                      background: 'rgba(255, 255, 255, 0.02)', 
-                      border: '1px dashed rgba(255, 255, 255, 0.1)', 
-                      borderRadius: '6px', 
-                      fontSize: '0.85rem', 
-                      whiteSpace: 'pre-line', 
-                      lineHeight: '1.6',
-                      color: 'var(--text-secondary)',
-                      marginTop: '0.3rem'
-                    }}>
-                      {fullAnswerInput ? fullAnswerInput.trim() : '（您未输入默写答案）'}
+                      {(clozeMisses.length > 0 || missingEssayPoints.length > 0) ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.2rem' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: '600' }}>⚡ 下次必须记住：</span>
+                          <ul style={{ 
+                            margin: 0, 
+                            paddingLeft: '1.25rem', 
+                            fontSize: '0.85rem', 
+                            color: 'var(--text-primary)', 
+                            lineHeight: '1.6',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.35rem'
+                          }}>
+                            {clozeMisses.map((kw, i) => (
+                              <li key={`miss-kw-${i}`}>
+                                核心词：<strong style={{ color: 'var(--danger)' }}>{kw}</strong>
+                              </li>
+                            ))}
+                            {missingEssayPoints.map((pt, i) => (
+                              <li key={`miss-pt-${i}`}>
+                                得分点：<strong>{pt}</strong>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '0.85rem', color: 'var(--success)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <CheckCircle2 size={14} style={{ color: 'var(--success)' }} /> 恭喜！您已经完整命中了所有核心要点，没有遗漏。
+                        </div>
+                      )}
                     </div>
-                  </div>
 
-                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>📋 参考最完整标准答案</span>
-                    <div style={{ 
-                      padding: '0.8rem 1rem', 
-                      background: 'rgba(0, 210, 255, 0.05)', 
-                      border: '1px solid rgba(0, 210, 255, 0.15)',
-                      borderRadius: '6px', 
-                      fontSize: '0.85rem', 
-                      whiteSpace: 'pre-line', 
-                      lineHeight: '1.6',
-                      marginTop: '0.3rem'
-                    }}>
-                      {currentQ.full_answer}
-                    </div>
-                  </div>
-                </div>
-              )}
+                    {/* Layer 2: 【差异对照】 (Auxiliary Visual Weight) */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+                      {/* Hits */}
+                      <div className="glass-panel" style={{ padding: '1rem', background: 'rgba(16, 185, 129, 0.01)', borderColor: 'rgba(16, 185, 129, 0.08)' }}>
+                        <span style={{ color: 'var(--success)', fontSize: '0.8rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.3rem', borderBottom: '1px solid rgba(16, 185, 129, 0.08)', paddingBottom: '0.4rem', marginBottom: '0.5rem' }}>
+                          <CheckCircle2 size={14} style={{ color: 'var(--success)' }} /> ✔ 已命中
+                        </span>
+                        <ul style={{ margin: 0, paddingLeft: '1.1rem', fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.6', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                          {clozeHits.map((kw, i) => (
+                            <li key={`hit-kw-${i}`} style={{ listStyleType: 'circle' }}>核心词: "{kw}"</li>
+                          ))}
+                          {localMatchedEssayPoints.map((pt, i) => (
+                            <li key={`hit-pt-${i}`} style={{ listStyleType: 'circle' }}>要点: "{pt}"</li>
+                          ))}
+                          {clozeHits.length === 0 && localMatchedEssayPoints.length === 0 && (
+                            <li style={{ listStyle: 'none', color: 'var(--text-muted)', paddingLeft: 0 }}>无命中</li>
+                          )}
+                        </ul>
+                      </div>
 
-              {/* Tab Content 2: AI Details */}
-              {activeReportTab === 'ai' && gradingResult && (
-                <div className="animate-fade" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <div className="glass-panel" style={{ padding: '0.8rem', background: 'rgba(16, 185, 129, 0.03)', borderColor: 'rgba(16, 185, 129, 0.15)' }}>
-                      <span style={{ color: 'var(--success)', fontSize: '0.85rem', fontWeight: 'bold' }}>🟢 叙述充分要点 ({gradingResult.full_evaluation?.covered_points?.length || 0})</span>
-                      <ul style={{ paddingLeft: '1.2rem', fontSize: '0.8rem', marginTop: '0.5rem', lineHeight: '1.6' }}>
-                        {gradingResult.full_evaluation?.covered_points?.length > 0 ? (
-                          gradingResult.full_evaluation.covered_points.map((pt, i) => <li key={i}>{pt}</li>)
-                        ) : <li style={{ listStyle: 'none', color: 'var(--text-muted)' }}>无核心要点对上</li>}
-                      </ul>
+                      {/* Reinforcements */}
+                      <div className="glass-panel" style={{ padding: '1rem', background: 'rgba(239, 68, 68, 0.01)', borderColor: 'rgba(239, 68, 68, 0.08)' }}>
+                        <span style={{ color: 'var(--warning)', fontSize: '0.8rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.3rem', borderBottom: '1px solid rgba(239, 68, 68, 0.08)', paddingBottom: '0.4rem', marginBottom: '0.5rem' }}>
+                          <AlertTriangle size={14} style={{ color: 'var(--warning)' }} /> 🔥 必强化
+                        </span>
+                        <ul style={{ margin: 0, paddingLeft: '1.1rem', fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.6', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                          {clozeMisses.map((kw, i) => (
+                            <li key={`re-kw-${i}`} style={{ listStyleType: 'circle' }}>核心词: <span style={{ color: 'var(--danger)' }}>"{kw}"</span></li>
+                          ))}
+                          {missingEssayPoints.map((pt, i) => (
+                            <li key={`re-pt-${i}`} style={{ listStyleType: 'circle' }}>得分点: <span style={{ color: 'var(--warning)' }}>"{pt}"</span></li>
+                          ))}
+                          {wrongEssayPoints.map((pt, i) => (
+                            <li key={`re-wrong-${i}`} style={{ listStyleType: 'circle' }}>偏离: <span style={{ color: 'var(--danger)' }}>"{pt}"</span></li>
+                          ))}
+                          {clozeMisses.length === 0 && missingEssayPoints.length === 0 && wrongEssayPoints.length === 0 && (
+                            <li style={{ listStyle: 'none', color: 'var(--success)', paddingLeft: 0 }}>无需强化</li>
+                          )}
+                        </ul>
+                      </div>
                     </div>
-                    <div className="glass-panel" style={{ padding: '0.8rem', background: 'rgba(239, 68, 68, 0.03)', borderColor: 'rgba(239, 68, 68, 0.15)' }}>
-                      <span style={{ color: 'var(--danger)', fontSize: '0.85rem', fontWeight: 'bold' }}>🔴 遗漏细节要点 ({gradingResult.full_evaluation?.missing_points?.length || 0})</span>
-                      <ul style={{ paddingLeft: '1.2rem', fontSize: '0.8rem', marginTop: '0.5rem', lineHeight: '1.6' }}>
-                        {gradingResult.full_evaluation?.missing_points?.length > 0 ? (
-                          gradingResult.full_evaluation.missing_points.map((pt, i) => <li key={i}>{pt}</li>)
-                        ) : <li style={{ listStyle: 'none', color: 'var(--success)' }}>论述非常饱满，无细节遗漏！</li>}
-                      </ul>
-                    </div>
-                  </div>
 
-                  {gradingResult.full_evaluation?.wrong_points?.length > 0 && (
-                    <div style={{ padding: '0.75rem', background: 'rgba(239,68,68,0.08)', borderRadius: '6px', fontSize: '0.85rem' }}>
-                      <strong style={{ color: 'var(--danger)' }}>⚠️ 表达误区：</strong>
-                      <span style={{ color: 'var(--text-primary)' }}>{gradingResult.full_evaluation.wrong_points.join('；')}</span>
-                    </div>
-                  )}
+                    {/* Layer 1: 【你的回答】 (Minor Visual Weight) */}
+                    <div className="glass-panel" style={{ padding: '1rem', background: 'rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {processedParts.some(p => p.type === 'blank') && (
+                        <div>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>填空核对：</span>
+                          <div style={{ 
+                            padding: '0.75rem 1rem', 
+                            background: 'rgba(0, 0, 0, 0.1)', 
+                            borderRadius: '8px', 
+                            lineHeight: '1.8', 
+                            fontSize: '0.85rem',
+                            color: 'var(--text-secondary)',
+                            border: '1px solid var(--border-color)',
+                            whiteSpace: 'pre-line',
+                            marginTop: '0.25rem'
+                          }}>
+                            {renderClozeText(currentQ.question, currentQ.cloze_answer)}
+                          </div>
+                        </div>
+                      )}
 
-                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block' }}>🧑‍🏫 阅卷评语</span>
-                    <p style={{ fontSize: '0.85rem', lineHeight: '1.5', fontStyle: 'italic', margin: '0.25rem 0' }}>
-                      “ {gradingResult.full_evaluation?.exam_comment || '无'} ”
-                    </p>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.5rem' }}>💡 改进方向建议</span>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--primary)' }}>
-                      {gradingResult.full_evaluation?.suggestion || '无'}
-                    </p>
+                      <div>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>你的默写回答：</span>
+                        <div style={{ 
+                          padding: '0.75rem 1rem', 
+                          background: 'rgba(0, 0, 0, 0.1)', 
+                          borderRadius: '8px', 
+                          fontSize: '0.85rem', 
+                          whiteSpace: 'pre-line', 
+                          lineHeight: '1.5',
+                          color: 'var(--text-secondary)',
+                          border: '1px dashed rgba(255, 255, 255, 0.05)',
+                          marginTop: '0.25rem'
+                        }}>
+                          {fullAnswerInput ? fullAnswerInput.trim() : '（未作答论述部分）'}
+                        </div>
+                      </div>
+                    </div>
+
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Action Buttons & Rating Panel */}
               <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>

@@ -376,37 +376,32 @@ app.post('/api/ai/grade', authenticateToken, async (req, res) => {
     // Call AI if enabled and not skipped, otherwise fallback to local keyword matching
     if (!skipAI && process.env.AI_API_KEY && process.env.ENABLE_AI_GRADING !== 'false') {
       try {
-        const systemPrompt = `你是一位专业的考研专业课阅卷教师。你需要对【论述题部分】的学生作答进行评审和评分（0-10分制，评分必须为整数）。
-
-论述题评分原则（较为严格）：
-- 强调全面性与论述深度：学生必须尽可能答出标准答案的所有核心要点和组成部分。
-- 细节比对：深入对比标准答案的全部细节展开，漏掉重要逻辑步骤或展开不够全面都要扣分。
+        const systemPrompt = `你是一位专业的考研专业课记忆强化教练。你需要对【论述题部分】的学生作答与标准得分点进行比对，指出必背遗漏和错误，并给出一句话记忆提示。
+评分规则（0-10分制，必须为整数）：
+- 按学生作答覆盖得分点比例打分。
 
 你必须输出且仅输出一个合法的 JSON 格式对象，结构如下：
 {
   "full_evaluation": {
     "score": 7,
-    "full_score": 10,
-    "level": "基本掌握",
-    "covered_points": ["细节阐述充分的第1个要点", "细节阐述充分的第2个要点"],
-    "missing_points": ["遗漏或阐述过于简略的第1个要点", "遗漏或阐述过于简略的第2个要点"],
-    "wrong_points": ["表述错误、概念偏离或存在逻辑漏洞的内容"],
-    "suggestion": "关于论述题深度、论证逻辑或补充细节的改进建议",
-    "exam_comment": "论述题深度短评，字数在100字以内"
+    "missing_points": ["遗漏得分点1", "遗漏得分点2"],
+    "wrong_points": ["概念表述有偏离的要点"],
+    "suggestion": "一句话核心背诵提示（必须在30个字以内，供下次复习记忆）"
   }
 }
-不要有任何 Markdown 包裹（不要用 \`\`\`json 或者是 \`\`\`），直接输出 JSON 内容。`;
+要求：
+- missing_points 和 wrong_points 中的每一项必须是极简短的短语（不超过15个字），不要写为什么错，也不要长句解释。
+- suggestion 必须是极简短的、可以直接用于下一次背诵的核心记忆锚点。
+- 不要有任何 Markdown 包裹（不要 \`\`\`json ），直接输出 JSON 内容。`;
 
         const userPrompt = `题目：${questionData.question}
 
-【论述题标准参考答案】：
-${questionData.full_answer}
-【论述题细节得分点】：
+【大纲标准得分点】：
 ${JSON.stringify(questionData.full_score_points || [])}
 
 --------------------
 【学生作答论述题】：
-"${fullAnswerInput || '（学生未作答）'}"`;
+"${fullAnswerInput || '（未作答）'}"`;
 
         const aiText = await callLLM(systemPrompt, userPrompt, process.env.AI_API_MODEL_GRADER);
         gradingResult = JSON.parse(aiText.trim());
@@ -467,13 +462,9 @@ function runLocalSingleGrader(input, points, modeName) {
   if (!cleanInput) {
     return {
       score: 0,
-      full_score: 10,
-      level: "完全不会",
-      covered_points: [],
       missing_points: points,
-      wrong_points: ["作答为空"],
-      suggestion: "请认真书写答案后再提交评分。",
-      exam_comment: `[本地评分] 未检测到您的${modeName}作答内容。`
+      wrong_points: ["未作答"],
+      suggestion: "请认真书写答案后再提交评分。"
     };
   }
   
@@ -497,21 +488,13 @@ function runLocalSingleGrader(input, points, modeName) {
   const scoreRatio = points.length > 0 ? (matches.length / points.length) : 0.5;
   const score = Math.round(scoreRatio * 10);
   
-  let level = "完全不会";
-  if (score >= 9) level = "熟练掌握";
-  else if (score >= 7) level = "基本掌握";
-  else if (score >= 5) level = "模糊印象";
-  else if (score >= 2) level = "稍微了解";
-  
   return {
     score,
-    full_score: 10,
-    level,
-    covered_points: matches,
     missing_points: misses,
     wrong_points: [],
-    suggestion: `[本地评分] 下次请重点关注：${misses.slice(0, 2).join('; ')}`,
-    exam_comment: `[本地评分] 答出 ${matches.length}/${points.length} 个关键得分点。`
+    suggestion: misses.length > 0 
+      ? `核心必背词: ${misses.slice(0, 2).join('; ')}`
+      : "本题回答理想，继续保持"
   };
 }
 
@@ -567,7 +550,7 @@ app.get('/api/statistics', authenticateToken, async (req, res) => {
 app.get('/api/history', authenticateToken, async (req, res) => {
   try {
     const sql = `
-      SELECT ah.*, q.question, q.subject, q.chapter, q.full_answer
+      SELECT ah.*, q.question, q.subject, q.chapter, q.full_answer, q.cloze_keywords, q.cloze_answer, q.full_score_points
       FROM answers_history ah
       JOIN questions q ON ah.question_id = q.id
       WHERE ah.user_id = $1

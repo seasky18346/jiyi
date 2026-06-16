@@ -1,5 +1,159 @@
 import React, { useState, useEffect } from 'react';
-import { ClipboardCheck, Search, Filter, Calendar, BookOpen, AlertTriangle, ArrowRight, Eye, RefreshCcw } from 'lucide-react';
+import { ClipboardCheck, Search, Filter, Calendar, BookOpen, AlertTriangle, ArrowRight, Eye, RefreshCcw, Sparkles, CheckCircle2, Zap, ChevronRight } from 'lucide-react';
+
+// --- Smart Cloze keyword filter ---
+const shouldDigKeyword = (kw, questionTitle, clozeAnswer) => {
+  if (!kw || typeof kw !== 'string') return false;
+  const cleanStr = (s) => (s || '').toLowerCase().replace(/[\s\(\)（）\-\_\,\.\?\!\，\。等是：\:：；;\s]/g, '');
+  const cleanKw = cleanStr(kw);
+  const cleanTitle = cleanStr(questionTitle);
+  
+  if (cleanKw.length < 2) return false;
+  if (cleanTitle.includes(cleanKw) || cleanKw.includes(cleanTitle)) {
+    return false;
+  }
+  const kwIndex = clozeAnswer.toLowerCase().indexOf(kw.toLowerCase());
+  if (kwIndex !== -1 && kwIndex < 20) {
+    let commonChars = 0;
+    for (const char of cleanKw) {
+      if (cleanTitle.includes(char)) commonChars++;
+    }
+    if (commonChars / cleanKw.length > 0.5) {
+      return false;
+    }
+  }
+  if (kwIndex !== -1) {
+    const startIdx = Math.max(0, kwIndex - 20);
+    const precedingText = clozeAnswer.substring(startIdx, kwIndex);
+    const hintRegex = /(核心定义|基本本质|主要包括|是指|概念|定义|本质|包括|即为|称为|简述)[：:\s是]*$/i;
+    if (hintRegex.test(precedingText.trim())) {
+      let commonChars = 0;
+      for (const char of cleanKw) {
+        if (cleanTitle.includes(char)) commonChars++;
+      }
+      if (commonChars / cleanKw.length > 0.4) {
+        return false;
+      }
+    }
+  }
+  return true;
+};
+
+// --- Lenient grading verification ---
+const isClozeAnswerCorrect = (userAns, standardKw) => {
+  if (!userAns || !standardKw) return false;
+  const cleanStr = (s) => s.toLowerCase().replace(/[\s\(\)（）\-\_\,\.\?\!\，\。等是：\:：；;\"\'“”‘’]/g, '');
+  const u = cleanStr(userAns);
+  const s = cleanStr(standardKw);
+  if (!u || !s) return false;
+  if (u === s) return true;
+  if (u.length >= 2 && (s.includes(u) || u.includes(s))) {
+    return true;
+  }
+  const SYNONYMS = [
+    ["gis", "地理信息系统"],
+    ["gps", "全球定位系统"],
+    ["rs", "遥感"],
+    ["空间", "地理空间"],
+    ["属性", "非几何"],
+    ["矢量", "向量"],
+    ["栅格", "网格", "象元"],
+    ["拓扑", "空间拓扑"],
+    ["元数据", "metadata"],
+    ["客户端", "client"],
+    ["服务端", "server"],
+    ["数据库", "db"]
+  ];
+  for (const group of SYNONYMS) {
+    const stdMatches = group.some(item => s.includes(cleanStr(item)) || cleanStr(item).includes(s));
+    const userMatches = group.some(item => u.includes(cleanStr(item)) || cleanStr(item).includes(u));
+    if (stdMatches && userMatches) return true;
+  }
+  if (s.length >= 3) {
+    let matchCount = 0;
+    const sChars = s.split('');
+    const uChars = u.split('');
+    const matchedIndices = new Set();
+    uChars.forEach(char => {
+      const idx = sChars.findIndex((sChar, index) => sChar === char && !matchedIndices.has(index));
+      if (idx !== -1) {
+        matchCount++;
+        matchedIndices.add(idx);
+      }
+    });
+    const maxLen = Math.max(s.length, u.length);
+    if (matchCount / maxLen >= 0.7) return true;
+  }
+  return false;
+};
+
+const getFilteredClozeParts = (questionTitle, clozeAnswer) => {
+  const parts = (clozeAnswer || '').split(/(\*\*.*?\*\*)/);
+  const processedParts = [];
+  let dugCount = 0;
+  
+  parts.forEach((part) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      const kw = part.slice(2, -2);
+      const isValid = shouldDigKeyword(kw, questionTitle, clozeAnswer);
+      if (isValid && dugCount < 5) {
+        processedParts.push({
+          type: 'blank',
+          text: kw,
+          inputKey: `kw_${dugCount}`
+        });
+        dugCount++;
+      } else {
+        processedParts.push({
+          type: 'text',
+          text: kw,
+          isBold: true
+        });
+      }
+    } else {
+      processedParts.push({
+        type: 'text',
+        text: part,
+        isBold: false
+      });
+    }
+  });
+  return { processedParts, dugCount };
+};
+
+const renderClozeText = (questionTitle, description, clozeAnswers) => {
+  const { processedParts } = getFilteredClozeParts(questionTitle, description);
+  return processedParts.map((part, index) => {
+    if (part.type === 'blank') {
+      const standardKw = part.text;
+      const inputKey = part.inputKey;
+      const userAnswer = (clozeAnswers[inputKey] || '').trim();
+      const isCorrect = isClozeAnswerCorrect(userAnswer, standardKw);
+      return (
+        <span key={index} style={{ 
+          display: 'inline-flex', 
+          alignItems: 'center', 
+          margin: '0 4px', 
+          padding: '0.15rem 0.4rem',
+          borderRadius: '4px',
+          background: isCorrect ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+          color: isCorrect ? 'var(--success)' : 'var(--danger)',
+          border: `1px solid ${isCorrect ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
+          fontWeight: 'bold',
+          fontSize: '0.85rem'
+        }}>
+          {userAnswer || '（空）'}
+          {!isCorrect && (
+            <span style={{ fontSize: '0.75rem', marginLeft: '4px', opacity: 0.85, fontWeight: 'normal' }}>
+              ({standardKw})
+            </span>
+          )}
+        </span>
+      );
+    }
+    return part.isBold ? <strong key={index} style={{ color: 'var(--accent)' }}>{part.text}</strong> : <span key={index}>{part.text}</span>;
+  });
+};
 
 export default function ReportView({ onStartPractice, reviewsData }) {
   const [history, setHistory] = useState([]);
@@ -289,73 +443,215 @@ export default function ReportView({ onStartPractice, reviewsData }) {
                 </div>
               </div>
 
-              {/* User answer vs Standard Answer */}
-              <div>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>✍️ 当时真实默写：</span>
-                <div style={{ 
-                  padding: '0.75rem 1rem', 
-                  background: 'rgba(255, 255, 255, 0.02)', 
-                  border: '1px dashed rgba(255, 255, 255, 0.1)', 
-                  borderRadius: '6px', 
-                  fontSize: '0.85rem', 
-                  whiteSpace: 'pre-line', 
-                  lineHeight: '1.5',
-                  color: 'var(--text-secondary)',
-                  marginTop: '0.3rem'
-                }}>
-                  {selectedAttempt.full_answer_input ? selectedAttempt.full_answer_input.trim() : '（未作答论述部分）'}
-                </div>
-              </div>
-
-              {/* Standard Answer */}
-              <div>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>📋 大纲参考标准答案：</span>
-                <div style={{ 
-                  padding: '0.75rem 1rem', 
-                  background: 'rgba(0, 210, 255, 0.04)', 
-                  border: '1px solid rgba(0, 210, 255, 0.15)',
-                  borderRadius: '6px', 
-                  fontSize: '0.85rem', 
-                  whiteSpace: 'pre-line', 
-                  lineHeight: '1.5',
-                  marginTop: '0.3rem'
-                }}>
-                  {selectedAttempt.full_answer}
-                </div>
-              </div>
-
-              {/* AI Details if present */}
+              {/* Compute Cloze & Essay differences */}
               {(() => {
+                const clozeAnswers = parseClozeAnswers(selectedAttempt);
+                const { processedParts } = getFilteredClozeParts(selectedAttempt.question, selectedAttempt.cloze_answer);
+                
+                const clozeHits = [];
+                const clozeMisses = [];
+                processedParts.forEach(part => {
+                  if (part.type === 'blank') {
+                    const standardKw = part.text;
+                    const userAnswer = (clozeAnswers[part.inputKey] || '').trim();
+                    if (isClozeAnswerCorrect(userAnswer, standardKw)) {
+                      clozeHits.push(standardKw);
+                    } else {
+                      clozeMisses.push(standardKw);
+                    }
+                  }
+                });
+
+                let essayPoints = selectedAttempt.full_score_points || [];
+                if (typeof essayPoints === 'string') {
+                  try {
+                    essayPoints = JSON.parse(essayPoints);
+                  } catch (e) {
+                    essayPoints = [];
+                  }
+                }
+                const localMatchedEssayPoints = [];
+                const fullAnswerInput = selectedAttempt.full_answer_input || '';
+                const cleanInput = fullAnswerInput.toLowerCase().trim();
+                if (cleanInput) {
+                  essayPoints.forEach(point => {
+                    const cleanedPoint = point.toLowerCase();
+                    const subsegments = cleanedPoint.split(/[,，().（）]/).filter(s => s.trim().length > 3);
+                    const matched = subsegments.length > 0 
+                      ? subsegments.some(sub => cleanInput.includes(sub.trim())) 
+                      : cleanInput.includes(cleanedPoint);
+                    if (matched) {
+                      localMatchedEssayPoints.push(point);
+                    }
+                  });
+                }
+
                 const aiReport = parseAiFeedback(selectedAttempt);
-                if (!aiReport) return null;
+                const finalReport = aiReport?.full_evaluation || aiReport;
+
+                const missingEssayPoints = finalReport
+                  ? (finalReport.missing_points || [])
+                  : essayPoints.filter(p => !localMatchedEssayPoints.includes(p));
+
+                const wrongEssayPoints = finalReport
+                  ? (finalReport.wrong_points || [])
+                  : [];
+
                 return (
-                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>🧠 AI 评阅分析对账单：</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                     
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                      <div className="glass-panel" style={{ padding: '0.6rem', background: 'rgba(16, 185, 129, 0.02)', borderColor: 'rgba(16, 185, 129, 0.1)' }}>
-                        <span style={{ color: 'var(--success)', fontSize: '0.75rem', fontWeight: 'bold' }}>🟢 阐述充分要点</span>
-                        <ul style={{ paddingLeft: '1rem', fontSize: '0.75rem', marginTop: '0.3rem', lineHeight: '1.5' }}>
-                          {aiReport.covered_points?.length > 0 ? (
-                            aiReport.covered_points.map((p, i) => <li key={i}>{p}</li>)
-                          ) : <li style={{ listStyle: 'none', color: 'var(--text-muted)' }}>无</li>}
+                    {/* Layer 3: 🔥 记忆强化卡 (Highest Visual Priority) */}
+                    <div className="glass-panel" style={{ 
+                      padding: '1.5rem', 
+                      background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.12) 0%, rgba(0, 210, 255, 0.08) 100%)', 
+                      border: '2px solid var(--secondary)',
+                      borderRadius: '16px',
+                      boxShadow: '0 0 20px rgba(139, 92, 246, 0.15), var(--shadow-glow), var(--shadow-md)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.85rem'
+                    }}>
+                      <h4 style={{ 
+                        color: 'var(--text-primary)', 
+                        fontWeight: '800', 
+                        fontSize: '1.05rem', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '0.4rem',
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                        paddingBottom: '0.5rem',
+                        margin: 0
+                      }}>
+                        <Sparkles size={16} style={{ color: 'var(--secondary)' }} />
+                        🔥 记忆强化卡
+                      </h4>
+                      
+                      <div style={{ 
+                        fontSize: '0.9rem', 
+                        fontWeight: '700', 
+                        color: 'var(--primary)',
+                        padding: '0.4rem 0.8rem',
+                        background: 'rgba(0, 210, 255, 0.05)',
+                        borderRadius: '8px',
+                        borderLeft: '3px solid var(--primary)',
+                        lineHeight: '1.4'
+                      }}>
+                        💡 提示：{finalReport?.suggestion || (clozeMisses.length > 0 || missingEssayPoints.length > 0 ? "下一次复习时，请重点关注以下遗漏的必背词和核心得分要点。" : "本次默写表现完美，继续保持！")}
+                      </div>
+
+                      {(clozeMisses.length > 0 || missingEssayPoints.length > 0) ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.2rem' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: '600' }}>⚡ 下次必须记住：</span>
+                          <ul style={{ 
+                            margin: 0, 
+                            paddingLeft: '1.25rem', 
+                            fontSize: '0.85rem', 
+                            color: 'var(--text-primary)', 
+                            lineHeight: '1.6',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.35rem'
+                          }}>
+                            {clozeMisses.map((kw, i) => (
+                              <li key={`miss-kw-${i}`}>
+                                核心词：<strong style={{ color: 'var(--danger)' }}>{kw}</strong>
+                              </li>
+                            ))}
+                            {missingEssayPoints.map((pt, i) => (
+                              <li key={`miss-pt-${i}`}>
+                                得分点：<strong>{pt}</strong>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '0.85rem', color: 'var(--success)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <CheckCircle2 size={14} style={{ color: 'var(--success)' }} /> 恭喜！您已经完整命中了所有核心要点，没有遗漏。
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Layer 2: 【差异对照】 (Auxiliary Visual Weight) */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+                      {/* Hits */}
+                      <div className="glass-panel" style={{ padding: '1rem', background: 'rgba(16, 185, 129, 0.01)', borderColor: 'rgba(16, 185, 129, 0.08)' }}>
+                        <span style={{ color: 'var(--success)', fontSize: '0.8rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.3rem', borderBottom: '1px solid rgba(16, 185, 129, 0.08)', paddingBottom: '0.4rem', marginBottom: '0.5rem' }}>
+                          <CheckCircle2 size={14} style={{ color: 'var(--success)' }} /> ✔ 已命中
+                        </span>
+                        <ul style={{ margin: 0, paddingLeft: '1.1rem', fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.6', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                          {clozeHits.map((kw, i) => (
+                            <li key={`hit-kw-${i}`} style={{ listStyleType: 'circle' }}>核心词: "{kw}"</li>
+                          ))}
+                          {localMatchedEssayPoints.map((pt, i) => (
+                            <li key={`hit-pt-${i}`} style={{ listStyleType: 'circle' }}>要点: "{pt}"</li>
+                          ))}
+                          {clozeHits.length === 0 && localMatchedEssayPoints.length === 0 && (
+                            <li style={{ listStyle: 'none', color: 'var(--text-muted)', paddingLeft: 0 }}>无命中</li>
+                          )}
                         </ul>
                       </div>
-                      <div className="glass-panel" style={{ padding: '0.6rem', background: 'rgba(239, 68, 68, 0.02)', borderColor: 'rgba(239, 68, 68, 0.1)' }}>
-                        <span style={{ color: 'var(--danger)', fontSize: '0.75rem', fontWeight: 'bold' }}>🔴 遗漏或不够要点</span>
-                        <ul style={{ paddingLeft: '1rem', fontSize: '0.75rem', marginTop: '0.3rem', lineHeight: '1.5' }}>
-                          {aiReport.missing_points?.length > 0 ? (
-                            aiReport.missing_points.map((p, i) => <li key={i}>{p}</li>)
-                          ) : <li style={{ listStyle: 'none', color: 'var(--success)' }}>无遗漏</li>}
+
+                      {/* Reinforcements */}
+                      <div className="glass-panel" style={{ padding: '1rem', background: 'rgba(239, 68, 68, 0.01)', borderColor: 'rgba(239, 68, 68, 0.08)' }}>
+                        <span style={{ color: 'var(--warning)', fontSize: '0.8rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.3rem', borderBottom: '1px solid rgba(239, 68, 68, 0.08)', paddingBottom: '0.4rem', marginBottom: '0.5rem' }}>
+                          <AlertTriangle size={14} style={{ color: 'var(--warning)' }} /> 🔥 必强化
+                        </span>
+                        <ul style={{ margin: 0, paddingLeft: '1.1rem', fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.6', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                          {clozeMisses.map((kw, i) => (
+                            <li key={`re-kw-${i}`} style={{ listStyleType: 'circle' }}>核心词: <span style={{ color: 'var(--danger)' }}>"{kw}"</span></li>
+                          ))}
+                          {missingEssayPoints.map((pt, i) => (
+                            <li key={`re-pt-${i}`} style={{ listStyleType: 'circle' }}>得分点: <span style={{ color: 'var(--warning)' }}>"{pt}"</span></li>
+                          ))}
+                          {wrongEssayPoints.map((pt, i) => (
+                            <li key={`re-wrong-${i}`} style={{ listStyleType: 'circle' }}>偏离: <span style={{ color: 'var(--danger)' }}>"{pt}"</span></li>
+                          ))}
+                          {clozeMisses.length === 0 && missingEssayPoints.length === 0 && wrongEssayPoints.length === 0 && (
+                            <li style={{ listStyle: 'none', color: 'var(--success)', paddingLeft: 0 }}>无需强化</li>
+                          )}
                         </ul>
                       </div>
                     </div>
 
-                    <div style={{ background: 'rgba(0,0,0,0.15)', padding: '0.75rem', borderRadius: '6px', fontSize: '0.8rem', lineHeight: '1.5' }}>
-                      <strong>评阅短评：</strong>“ {aiReport.exam_comment || '无'} ”
-                      <br />
-                      <strong style={{ color: 'var(--primary)', display: 'block', marginTop: '0.3rem' }}>改进方向：{aiReport.suggestion || '无'}</strong>
+                    {/* Layer 1: 【你的回答】 (Minor Visual Weight) */}
+                    <div className="glass-panel" style={{ padding: '1rem', background: 'rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {processedParts.some(p => p.type === 'blank') && (
+                        <div>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>填空核对：</span>
+                          <div style={{ 
+                            padding: '0.75rem 1rem', 
+                            background: 'rgba(0, 0, 0, 0.1)', 
+                            borderRadius: '8px', 
+                            lineHeight: '1.8', 
+                            fontSize: '0.85rem',
+                            color: 'var(--text-secondary)',
+                            border: '1px solid var(--border-color)',
+                            whiteSpace: 'pre-line',
+                            marginTop: '0.25rem'
+                          }}>
+                            {renderClozeText(selectedAttempt.question, selectedAttempt.cloze_answer, clozeAnswers)}
+                          </div>
+                        </div>
+                      )}
+
+                      <div>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>你的默写回答：</span>
+                        <div style={{ 
+                          padding: '0.75rem 1rem', 
+                          background: 'rgba(0, 0, 0, 0.1)', 
+                          borderRadius: '8px', 
+                          fontSize: '0.85rem', 
+                          whiteSpace: 'pre-line', 
+                          lineHeight: '1.5',
+                          color: 'var(--text-secondary)',
+                          border: '1px dashed rgba(255, 255, 255, 0.05)',
+                          marginTop: '0.25rem'
+                        }}>
+                          {fullAnswerInput ? fullAnswerInput.trim() : '（未作答论述部分）'}
+                        </div>
+                      </div>
                     </div>
+
                   </div>
                 );
               })()}
