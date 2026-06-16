@@ -354,9 +354,6 @@ export default function ReportView({ onStartPractice, reviewsData }) {
                     <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                       ⏱️ {dateStr}
                     </span>
-                    <span style={{ padding: '0.1rem 0.4rem', borderRadius: '4px', background: 'rgba(255,255,255,0.04)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                      {h.chapter || '未分类'}
-                    </span>
                     {isWeak && (
                       <span style={{ padding: '0.1rem 0.4rem', borderRadius: '4px', background: 'rgba(239,68,68,0.15)', color: 'var(--danger)', fontSize: '0.65rem', fontWeight: 'bold' }}>
                         错题回炉中
@@ -413,9 +410,6 @@ export default function ReportView({ onStartPractice, reviewsData }) {
               
               {/* Question card */}
               <div className="glass-panel" style={{ padding: '1rem 1.25rem', background: 'rgba(0,0,0,0.1)' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 'bold' }}>
-                  {selectedAttempt.chapter || '未分类'}
-                </span>
                 <h4 style={{ fontSize: '1.05rem', fontWeight: 'bold', marginTop: '0.2rem', lineHeight: '1.4' }}>
                   {selectedAttempt.question}
                 </h4>

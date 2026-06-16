@@ -9,12 +9,10 @@ export default function DailyPractice({ onStartPractice, reviewsData }) {
   // Search/Filter states
   const [searchQuestion, setSearchQuestion] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [searchChapter, setSearchChapter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 6;
 
   // Practice Config states
-  const [targetChapter, setTargetChapter] = useState('');
   const [randomCount, setRandomCount] = useState(5);
 
   useEffect(() => {
@@ -23,7 +21,7 @@ export default function DailyPractice({ onStartPractice, reviewsData }) {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuestion, searchKeyword, searchChapter]);
+  }, [searchQuestion, searchKeyword]);
 
   const fetchQuestions = async () => {
     setLoading(true);
@@ -40,17 +38,7 @@ export default function DailyPractice({ onStartPractice, reviewsData }) {
     }
   };
 
-  const uniqueChapters = [...new Set(questions.map(q => q.chapter).filter(Boolean))];
-
-  // 1. Chapter practice trigger
-  const handleStartChapterPractice = () => {
-    if (!targetChapter) {
-      window.customAlert('请先选择需要特训的章节！');
-      return;
-    }
-    const chapterQs = questions.filter(q => q.chapter === targetChapter);
-    onStartPractice(`章节特训: ${targetChapter}`, chapterQs);
-  };
+  // Chapter特训已移除
 
   // 2. Mock errors practice trigger
   const handleStartMockErrors = () => {
@@ -104,9 +92,7 @@ export default function DailyPractice({ onStartPractice, reviewsData }) {
       );
       if (!matchesClozeKeyword && !matchesClozeAnswer && !matchesFullScorePoint) return false;
     }
-    if (searchChapter) {
-      if (q.chapter !== searchChapter) return false;
-    }
+    // Chapter filter removed
     return true;
   });
 
@@ -161,39 +147,7 @@ export default function DailyPractice({ onStartPractice, reviewsData }) {
           
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
             
-            {/* Chapter practice card */}
-            <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', justifySpace: 'between', minHeight: '210px', gap: '1rem' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)', fontWeight: 'bold' }}>
-                  <Layers size={18} />
-                  <span>章节专项特训</span>
-                </div>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.4rem', lineHeight: '1.4' }}>
-                  精细化攻克指定大纲章节下的所有记忆考点，适合按章节一轮背诵或集中突破。
-                </p>
-              </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <select
-                  className="form-input-text"
-                  value={targetChapter}
-                  onChange={(e) => setTargetChapter(e.target.value)}
-                  style={{ padding: '0.5rem', fontSize: '0.85rem', height: 'auto', background: 'rgba(0,0,0,0.2)' }}
-                >
-                  <option value="">-- 请选择章节 --</option>
-                  {uniqueChapters.map(ch => <option key={ch} value={ch}>{ch}</option>)}
-                </select>
-                <button
-                  type="button"
-                  onClick={handleStartChapterPractice}
-                  disabled={!targetChapter}
-                  className="text-btn primary-btn"
-                  style={{ padding: '0.5rem', fontSize: '0.85rem' }}
-                >
-                  开始章节特训
-                </button>
-              </div>
-            </div>
 
             {/* Mock errors card */}
             <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', justifySpace: 'between', minHeight: '210px', gap: '1rem' }}>
@@ -335,27 +289,14 @@ export default function DailyPractice({ onStartPractice, reviewsData }) {
                   style={{ padding: '0.5rem', fontSize: '0.85rem' }}
                 />
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>章节筛选</label>
-                <select
-                  className="form-input-text"
-                  value={searchChapter}
-                  onChange={e => setSearchChapter(e.target.value)}
-                  style={{ padding: '0.5rem', fontSize: '0.85rem', height: 'auto' }}
-                >
-                  <option value="">全部章节</option>
-                  {uniqueChapters.map(ch => <option key={ch} value={ch}>{ch}</option>)}
-                </select>
-              </div>
             </div>
 
-            {(searchQuestion || searchKeyword || searchChapter) && (
+            {(searchQuestion || searchKeyword) && (
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <button
                   onClick={() => {
                     setSearchQuestion('');
                     setSearchKeyword('');
-                    setSearchChapter('');
                   }}
                   className="text-btn"
                   style={{ padding: '0.4rem 1.2rem', fontSize: '0.8rem', color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.2)' }}
@@ -389,9 +330,6 @@ export default function DailyPractice({ onStartPractice, reviewsData }) {
                   >
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-                        <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '200px' }}>
-                          {q.chapter || '未分类'}
-                        </span>
                         <span style={{ fontWeight: 'bold', color: 'var(--primary)' }}>
                           Box {q.mastery_level || 0}
                         </span>

@@ -561,16 +561,7 @@ export default function QuestionManager({ globalImportState, onStartGlobalImport
               </div>
             </div>
  
-            {/* Chapter */}
-            <div className="form-group">
-              <label>所属章节</label>
-              <input 
-                type="text" 
-                className="form-input-text" 
-                value={formChapter} 
-                onChange={(e) => setFormChapter(e.target.value)} 
-              />
-            </div>
+
  
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               {/* Difficulty */}
@@ -744,16 +735,6 @@ export default function QuestionManager({ globalImportState, onStartGlobalImport
                         value={importSubject} 
                         onChange={(e) => setImportSubject(e.target.value)} 
                         placeholder="例如: 地理信息系统学基础"
-                      />
-                    </div>
-                    <div className="form-group" style={{ flex: 1 }}>
-                      <label>默认章节名称 (选填)</label>
-                      <input 
-                        type="text" 
-                        className="form-input-text" 
-                        value={importChapter} 
-                        onChange={(e) => setImportChapter(e.target.value)} 
-                        placeholder="例如: 地理信息系统基础理论"
                       />
                     </div>
                   </>

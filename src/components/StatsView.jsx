@@ -166,11 +166,9 @@ export default function StatsView({ reviewsData }) {
               今日备考复习决策建议
             </h4>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.3rem', lineHeight: '1.4' }}>
-              优先攻坚章节 (最高权重大于4)：<strong style={{ color: 'var(--primary)' }}>{stats.highestPriorityChapter || '暂无'}</strong>
-              <span style={{ margin: '0 0.5rem', color: 'rgba(255,255,255,0.15)' }}>|</span>
-              全库薄弱阻碍章节：<strong style={{ color: 'var(--danger)' }}>{stats.weakestChapter || '暂无'}</strong>
-              <span style={{ margin: '0 0.5rem', color: 'rgba(255,255,255,0.15)' }}>|</span>
               当前全库记忆掌握率：<strong style={{ color: 'var(--success)' }}>{masteryPercentage}%</strong>
+              <span style={{ margin: '0 0.5rem', color: 'rgba(255,255,255,0.15)' }}>|</span>
+              已背诵启动卡片占总库比：<strong style={{ color: 'var(--primary)' }}>{stats.totalQuestions > 0 ? Math.round((stats.learnedQuestions / stats.totalQuestions) * 100) : 0}%</strong>
             </p>
           </div>
         </div>
@@ -562,93 +560,11 @@ export default function StatsView({ reviewsData }) {
 
       </div>
 
-      {/* Grid: Chapter Health Diagnostics & 7-Days Trend */}
-      <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '1.5rem' }}>
+      {/* Grid: 7-Days Trend */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         
-        {/* Knowledge Module Health Diagnostics */}
-        <div className="glass-panel" style={{ padding: '1.5rem' }}>
-          <h3 style={{ fontSize: '1.1rem', marginBottom: '1.25rem', fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <BookOpen size={18} style={{ color: 'var(--primary)' }} />
-            知识章节背诵进度与健康诊断
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', maxHeight: '300px', overflowY: 'auto', paddingRight: '0.25rem' }}>
-            {stats.chapterProgress && stats.chapterProgress.length > 0 ? (
-              stats.chapterProgress.map((ch, idx) => {
-                const total = parseInt(ch.total_count) || 1;
-                const mastered = parseInt(ch.mastered_count) || 0;
-                const learning = parseInt(ch.learning_count) || 0;
-                const unstudied = total - mastered - learning;
-
-                const masteredPercent = Math.round((mastered / total) * 100);
-                const learningPercent = Math.round((learning / total) * 100);
-                const unstudiedPercent = 100 - masteredPercent - learningPercent;
-
-                // Match with errors for health rating
-                const weaknessInfo = stats.chapterWeaknesses?.find(w => w.chapter === ch.chapter);
-                const errors = weaknessInfo ? parseInt(weaknessInfo.error_count) : 0;
-                const avgScore = weaknessInfo ? parseFloat(weaknessInfo.avg_score) : 10.0;
-
-                let healthStatus = { label: '良好', color: 'var(--success)', bg: 'rgba(16, 185, 129, 0.08)' };
-                if (errors >= 5 || avgScore < 5.0) {
-                  healthStatus = { label: '高危攻坚', color: 'var(--danger)', bg: 'rgba(239, 68, 68, 0.08)' };
-                } else if (errors > 0 || avgScore < 8.0) {
-                  healthStatus = { label: '一般波动', color: 'var(--warning)', bg: 'rgba(245, 158, 11, 0.08)' };
-                }
-
-                return (
-                  <div key={idx} style={{ 
-                    padding: '0.75rem', 
-                    border: '1px solid var(--border-color)', 
-                    borderRadius: '12px',
-                    background: 'rgba(255, 255, 255, 0.005)'
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', gap: '0.5rem' }}>
-                      <span style={{ fontWeight: '700', fontSize: '0.85rem', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                        {ch.chapter}
-                      </span>
-                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
-                        <span style={{ 
-                          fontSize: '0.65rem', 
-                          color: healthStatus.color, 
-                          background: healthStatus.bg,
-                          padding: '0.1rem 0.4rem',
-                          borderRadius: '4px',
-                          fontWeight: '700'
-                        }}>
-                          {healthStatus.label}
-                        </span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                          {mastered}/{total} 已掌握
-                        </span>
-                      </div>
-                    </div>
-                    
-                    {/* Multi-colored bar */}
-                    <div style={{ 
-                      height: '6px', 
-                      background: 'rgba(255,255,255,0.03)', 
-                      borderRadius: '10px', 
-                      display: 'flex', 
-                      overflow: 'hidden',
-                      border: '1px solid rgba(255,255,255,0.01)'
-                    }}>
-                      <div style={{ width: `${masteredPercent}%`, background: 'var(--success)' }} title={`熟练掌握: ${masteredPercent}%`} />
-                      <div style={{ width: `${learningPercent}%`, background: 'var(--primary)' }} title={`学习中: ${learningPercent}%`} />
-                      <div style={{ width: `${unstudiedPercent}%`, background: 'rgba(255,255,255,0.08)' }} title={`未学习: ${unstudiedPercent}%`} />
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                暂无章节统计数据。
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* 7 Days Trend Table */}
-        <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', width: '100%', boxSizing: 'border-box' }}>
           <h3 style={{ fontSize: '1.1rem', marginBottom: '1.25rem', fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <Activity size={18} style={{ color: 'var(--primary)' }} />
             近 7 天背诵负荷与效率趋势
