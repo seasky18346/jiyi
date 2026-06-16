@@ -12,7 +12,7 @@ export default function AppShell({
   backendAvailable, 
   sessionFilter 
 }) {
-  const isImmersive = activeTab === 'today-review' || activeTab === 'recite' || activeTab === 'daily-practice';
+  const isImmersive = activeTab === 'today-review' || activeTab === 'recite' || activeTab === 'practice';
 
   const getSessionTitle = () => {
     if (activeTab === 'today-review') {
@@ -24,7 +24,7 @@ export default function AppShell({
     if (activeTab === 'recite') {
       return '卡片带背模式';
     }
-    if (activeTab === 'daily-practice') {
+    if (activeTab === 'practice') {
       return '专项回忆练习';
     }
     return '';

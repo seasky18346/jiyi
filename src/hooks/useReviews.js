@@ -49,10 +49,12 @@ export default function useReviews(dailyNewGoal, dailyReviewGoal, enabled = true
   const todayNewTargetCount = Math.min(dailyNewGoal, newQuestionsCount);
   const cappedLearnQueue = reviews.newQuestions?.slice(0, todayNewTargetCount) || [];
 
-  // Unified Review Queue: delayedQuestions + dueQuestions (already sorted by backend priority)
+  // Unified Review Queue: errorReinforcement + delayedQuestions + dueQuestions + upcomingQuestions
   const combinedReviewList = [
+    ...(reviews.errorReinforcement || []),
     ...(reviews.delayedQuestions || []),
-    ...(reviews.dueQuestions || [])
+    ...(reviews.dueQuestions || []),
+    ...(reviews.upcomingQuestions || [])
   ];
 
   // Cap by daily review limit safely (unlimited check)
@@ -61,7 +63,7 @@ export default function useReviews(dailyNewGoal, dailyReviewGoal, enabled = true
     : combinedReviewList.slice(0, dailyReviewGoal);
 
   const dueReviewCount = cappedReviewQueue.length;
-  const actualDueCount = combinedReviewList.length;
+  const actualDueCount = (reviews.errorReinforcement?.length || 0) + (reviews.delayedQuestions?.length || 0) + (reviews.dueQuestions?.length || 0);
   const delayedCount = reviews.delayedQuestions?.length || 0;
   const dueQuestionsCount = reviews.dueQuestions?.length || 0;
 

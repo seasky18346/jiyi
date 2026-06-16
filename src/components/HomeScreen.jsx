@@ -89,7 +89,8 @@ export default function HomeScreen({ reviewsData, startSession }) {
         {/* Card 1: Learn */}
         <div 
           className="home-card glass-panel learn-card"
-          onClick={() => setActiveMenu('learn')}
+          onClick={() => handleSelectOption('start-queue', [], '今日学习包', 'learn')}
+          style={{ cursor: 'pointer' }}
         >
           <div className="home-card-header">
             <span className="home-card-tag">Learn</span>
@@ -107,7 +108,14 @@ export default function HomeScreen({ reviewsData, startSession }) {
         {/* Card 2: Review */}
         <div 
           className="home-card glass-panel review-card"
-          onClick={() => setActiveMenu('review')}
+          onClick={() => {
+            if (dueReviewCount > 0) {
+              handleSelectOption('start-queue', cappedReviewQueue, '今日复习', 'standard');
+            } else {
+              window.customAlert('您今天没有到期的复习任务！可以前往“专项训练”或“今日学习包”进行练习。');
+            }
+          }}
+          style={{ cursor: 'pointer', opacity: dueReviewCount === 0 ? 0.8 : 1 }}
         >
           <div className="home-card-header">
             <span className="home-card-tag">Review</span>
@@ -122,155 +130,6 @@ export default function HomeScreen({ reviewsData, startSession }) {
           </div>
         </div>
       </div>
-
-      {/* Popovers for Learn/Review */}
-      {activeMenu && (
-        <div className="overlay-modal-container" onClick={() => setActiveMenu(null)}>
-          <div className="overlay-modal glass-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header" style={{ marginBottom: '1rem' }}>
-              <h3>{activeMenu === 'learn' ? '新学任务' : '复习任务'}</h3>
-              <button className="modal-close-btn" onClick={() => setActiveMenu(null)}>
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Mode selector Segment Control */}
-            {!(activeMenu === 'learn' && mode === 'recite') && (
-              <div className="mode-selector-container" style={{ marginBottom: '1.25rem' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>
-                  选择练习模式:
-                </span>
-                <div className="mode-pills" style={{ display: 'flex', background: 'rgba(0,0,0,0.15)', borderRadius: '12px', padding: '2px', border: '1px solid var(--border-color)' }}>
-                  {[
-                    { id: 'quick', label: '⚡ 快速复习', desc: '仅测试填空' },
-                    { id: 'standard', label: '🚀 标准复习', desc: '填空+论述，可跳过AI' },
-                    { id: 'deep', label: '🧠 深度自测', desc: '填空+论述+AI智能阅卷' }
-                  ].map(m => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setMode(m.id)}
-                      style={{
-                        flex: 1,
-                        padding: '0.5rem 0.25rem',
-                        borderRadius: '10px',
-                        border: 'none',
-                        background: mode === m.id ? 'var(--accent)' : 'transparent',
-                        color: mode === m.id ? 'var(--bg-dark)' : 'var(--text-secondary)',
-                        fontWeight: '700',
-                        fontSize: '0.75rem',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s'
-                      }}
-                      title={m.desc}
-                    >
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            <div className="modal-options-list">
-              {activeMenu === 'learn' ? (
-                <>
-                  <button 
-                    className="modal-option-item"
-                    disabled={cappedLearnQueue.length === 0}
-                    onClick={() => handleSelectOption('start-queue', cappedLearnQueue, '今日新学', mode)}
-                    style={cappedLearnQueue.length === 0 ? { opacity: 0.6 } : {}}
-                  >
-                    <div className="option-icon-wrapper success">
-                      <Layers size={18} />
-                    </div>
-                    <div className="option-details">
-                      <h4>今日计划新学</h4>
-                      <p>进行今日新学 {cappedLearnQueue.length} 个考点（使用已选模式）</p>
-                    </div>
-                    <ChevronRight size={18} className="option-arrow" />
-                  </button>
-
-                  <button 
-                    className="modal-option-item"
-                    onClick={() => handleSelectOption('recite', null, '', 'recite')}
-                  >
-                    <div className="option-icon-wrapper info">
-                      <ClipboardList size={18} />
-                    </div>
-                    <div className="option-details">
-                      <h4>全部卡片背诵 (卡片自评模式)</h4>
-                      <p>进行自由背诵卡片自评，不使用快速/标准/深度模式</p>
-                    </div>
-                    <ChevronRight size={18} className="option-arrow" />
-                  </button>
-
-                  <button 
-                    className="modal-option-item"
-                    onClick={() => handleSelectOption('daily-practice', null, '', mode)}
-                  >
-                    <div className="option-icon-wrapper warning">
-                      <CheckCircle2 size={18} />
-                    </div>
-                    <div className="option-details">
-                      <h4>专项回忆练习</h4>
-                      <p>按科目、章节、题型进行自定义筛选特训</p>
-                    </div>
-                    <ChevronRight size={18} className="option-arrow" />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button 
-                    className="modal-option-item"
-                    disabled={dueReviewCount === 0}
-                    onClick={() => handleSelectOption('start-queue', cappedReviewQueue, '今日复习', mode)}
-                    style={dueReviewCount === 0 ? { opacity: 0.6 } : {}}
-                  >
-                    <div className="option-icon-wrapper success">
-                      <RefreshCw size={18} />
-                    </div>
-                    <div className="option-details">
-                      <h4>今日到期复习</h4>
-                      <p>巩固今天到期的 {dueReviewCount} 个核心概念（使用已选模式）</p>
-                    </div>
-                    <ChevronRight size={18} className="option-arrow" />
-                  </button>
-
-                  <button 
-                    className="modal-option-item"
-                    disabled={forgotCount === 0}
-                    onClick={() => handleSelectOption('start-queue', reviews.errorReinforcement, '错题强化', 'deep')}
-                    style={forgotCount === 0 ? { opacity: 0.6 } : {}}
-                  >
-                    <div className="option-icon-wrapper danger">
-                      <AlertTriangle size={18} />
-                    </div>
-                    <div className="option-details">
-                      <h4>错题回炉</h4>
-                      <p>集中自测当前答错较多的 {forgotCount} 个易忘难点（强制深度自测）</p>
-                    </div>
-                    <ChevronRight size={18} className="option-arrow" />
-                  </button>
-
-                  <button 
-                    className="modal-option-item"
-                    onClick={() => handleSelectOption('stats', null, '', mode)}
-                  >
-                    <div className="option-icon-wrapper warning">
-                      <HelpCircle size={18} />
-                    </div>
-                    <div className="option-details">
-                      <h4>弱点统计看板</h4>
-                      <p>查看历史掌握度分布与高频失分错题统计</p>
-                    </div>
-                    <ChevronRight size={18} className="option-arrow" />
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

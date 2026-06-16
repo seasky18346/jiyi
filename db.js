@@ -434,6 +434,7 @@ export async function getTodayReviews(userId) {
     dueQuestions: [],
     errorReinforcement: [],
     delayedQuestions: [],
+    upcomingQuestions: [],
     allReviews: []
   };
 
@@ -485,6 +486,8 @@ export async function getTodayReviews(userId) {
       } else if (isDue) {
         categories.dueQuestions.push(r);
         categories.allReviews.push(r);
+      } else {
+        categories.upcomingQuestions.push(r);
       }
     }
   });
@@ -493,6 +496,7 @@ export async function getTodayReviews(userId) {
   categories.delayedQuestions.sort((a, b) => b.priority - a.priority);
   categories.dueQuestions.sort((a, b) => b.priority - a.priority);
   categories.errorReinforcement.sort((a, b) => b.priority - a.priority);
+  categories.upcomingQuestions.sort((a, b) => b.priority - a.priority);
   categories.allReviews.sort((a, b) => b.priority - a.priority);
 
   // Sort new questions by created_at descending (newest first) to prioritize today's new uploads
@@ -580,7 +584,8 @@ export async function saveGrade(userId, questionId, detailScores, inputs, aiFeed
 }
 
 // Log card rating (忘记, 困难, 基本会, 熟练) and update schedule (user-scoped)
-export async function rateCard(userId, questionId, rating) {
+export async function rateCard(userId, questionId, rating, inputs = {}) {
+  const { clozeAnswers = {}, fullAnswerInput = '' } = inputs;
   const intervalDays = SCHEDULER_RULES.intervalsByRating[rating] || 1;
   const now = new Date();
   const nextReviewTime = new Date();
@@ -611,15 +616,16 @@ export async function rateCard(userId, questionId, rating) {
 
   reviewCount++;
 
-  // Save history log
+  // Save history log with student's actual inputs
   await query(`
-    INSERT INTO answers_history (user_id, question_id, total_score, full_answer_input, ai_feedback)
-    VALUES ($1, $2, $3, $4, $5)
+    INSERT INTO answers_history (user_id, question_id, total_score, cloze_answers, full_answer_input, ai_feedback)
+    VALUES ($1, $2, $3, $4, $5, $6)
   `, [
     userId,
     questionId, 
     rating === 'easy' ? 10 : rating === 'good' ? 8 : rating === 'hard' ? 5 : 2, 
-    `[卡片自评] ${rating}`, 
+    JSON.stringify(clozeAnswers),
+    fullAnswerInput || `[自评] ${rating}`, 
     JSON.stringify({ rating, comments: `卡片背诵自评结果为: ${rating}` })
   ]);
 
@@ -830,3 +836,30 @@ export async function getUserById(id) {
   if (res.rows.length === 0) return null;
   return res.rows[0];
 }
+
+export async function toggleWeakCard(userId, questionId, forceWeak) {
+  if (forceWeak) {
+    await query(`
+      INSERT INTO review_states (user_id, question_id, mastery_level, error_count, next_review_time, weakness_summary, updated_at)
+      VALUES ($1, $2, 1, 2, CURRENT_TIMESTAMP, $3, CURRENT_TIMESTAMP)
+      ON CONFLICT (user_id, question_id) DO UPDATE SET
+        mastery_level = 1,
+        error_count = GREATEST(review_states.error_count, 2),
+        next_review_time = CURRENT_TIMESTAMP,
+        weakness_summary = $3,
+        updated_at = CURRENT_TIMESTAMP
+    `, [userId, questionId, JSON.stringify(['用户手动拉入错题强化'])]);
+  } else {
+    await query(`
+      UPDATE review_states
+      SET mastery_level = 3,
+          error_count = 0,
+          last_score = 8,
+          average_score = GREATEST(average_score, 7),
+          next_review_time = CURRENT_TIMESTAMP + INTERVAL '3 days',
+          updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = $1 AND question_id = $2
+    `, [userId, questionId]);
+  }
+}
+

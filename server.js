@@ -21,7 +21,8 @@ import {
   clearAllTables,
   createUser,
   getUserByUsername,
-  getUserById
+  getUserById,
+  toggleWeakCard
 } from './db.js';
 
 dotenv.config();
@@ -517,11 +518,11 @@ function runLocalSingleGrader(input, points, modeName) {
 // 8. Leitner self-rating rating sync
 app.post('/api/cards/rate', authenticateToken, async (req, res) => {
   try {
-    const { questionId, rating } = req.body;
+    const { questionId, rating, clozeAnswers, fullAnswerInput } = req.body;
     if (!questionId || !rating) {
       return res.status(400).json({ success: false, message: 'questionId and rating are required' });
     }
-    await rateCard(req.user.userId, parseInt(questionId), rating);
+    await rateCard(req.user.userId, parseInt(questionId), rating, { clozeAnswers, fullAnswerInput });
     res.json({ success: true, message: 'Card rating saved successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -557,6 +558,37 @@ app.get('/api/statistics', authenticateToken, async (req, res) => {
   try {
     const stats = await getStatistics(req.user.userId);
     res.json({ success: true, data: stats });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 9.5. Get user's recitation attempts history
+app.get('/api/history', authenticateToken, async (req, res) => {
+  try {
+    const sql = `
+      SELECT ah.*, q.question, q.subject, q.chapter, q.full_answer
+      FROM answers_history ah
+      JOIN questions q ON ah.question_id = q.id
+      WHERE ah.user_id = $1
+      ORDER BY ah.created_at DESC
+    `;
+    const result = await query(sql, [req.user.userId]);
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 9.6. Toggle question weak status (add/remove from error reinforcement)
+app.post('/api/history/toggle-weak', authenticateToken, async (req, res) => {
+  try {
+    const { questionId, forceWeak } = req.body;
+    if (!questionId) {
+      return res.status(400).json({ success: false, message: 'questionId is required' });
+    }
+    await toggleWeakCard(req.user.userId, parseInt(questionId), !!forceWeak);
+    res.json({ success: true, message: 'Weak card status updated successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

@@ -9,6 +9,7 @@ import DailyPractice from './components/DailyPractice';
 import HomeScreen from './components/HomeScreen';
 import AppShell from './components/AppShell';
 import LoginScreen from './components/LoginScreen';
+import ReportView from './components/ReportView';
 import useSettings from './hooks/useSettings';
 import useReviews from './hooks/useReviews';
 import './App.css';
@@ -520,11 +521,24 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'daily-practice' && (
+          {activeTab === 'practice' && (
             <DailyPractice
               onStartPractice={(name, queue) => {
                 setPracticeQueue(queue);
                 setPracticeQueueName(name);
+                setPracticeMode('standard');
+                setActiveTab('today-review');
+              }}
+              reviewsData={reviewsData}
+            />
+          )}
+
+          {activeTab === 'report' && (
+            <ReportView 
+              onStartPractice={(name, queue) => {
+                setPracticeQueue(queue);
+                setPracticeQueueName(name);
+                setPracticeMode('standard');
                 setActiveTab('today-review');
               }}
               reviewsData={reviewsData}
